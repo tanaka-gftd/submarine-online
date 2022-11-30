@@ -7,6 +7,7 @@ const helmet = require('helmet');
 
 var indexRouter = require('./routes/index');
 const gameRouter = require('./routes/game');
+const loginRouter = require('./routes/login');
 
 var app = express();
 
@@ -31,8 +32,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+//URLパスごとに使用するテンプレートファイルを設定
 app.use('/', indexRouter);
 app.use('/game', gameRouter);
+app.use('/login/twitter', loginRouter);  //Twitterによるログイン機能は未実装
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

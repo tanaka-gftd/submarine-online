@@ -1,7 +1,10 @@
 extends layout 
 
 block content
+  //- canvasタグ...Javascriptからゲームなどの描画をする際に細かな座標の指定や、描画の設定ができるタグ（#以下はid）
+  //- canvasタグについて https://developer.mozilla.org/ja/docs/Web/API/Canvas_API
   canvas#rader
   canvas#score 
   h3 #{displayName}
+  //- data-*...グローバル属性。グローバルな情報として登録できる
   script#main(src="javascripts/index/bundle.js", data-displayName=`${displayName}`, data-thumbUrl=`${thumbUrl}`, data-ipAddress=`${ipAddress}`)

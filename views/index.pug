@@ -2,5 +2,19 @@ extends layout
 
 block content
   h1 オンライン潜水艦ゲーム
+  //- user変数が設定されているかどうかで表示を切り替える
+  //- 今回はtwitterログイン機能を実装していないので、elseの方が表示される
+  if user 
+    h4 以下のアカウントでゲームに参加できます。
+    h2 #{user.displayName}
+      img(src=`${user.photos[0].value}`)
+    h2 
+      a(href='game') #{user.displayName} でゲームに参加
+    h3 
+      a(href='logout') ログアウト
+  else 
+    h3 記録を残すには twiiter でログインしてください。
+    h3 
+      a(href='/login/twitter') Twitter でログイン
     h3 
       a(href='game') 匿名でゲームに参加 
