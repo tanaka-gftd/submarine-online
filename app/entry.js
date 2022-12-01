@@ -3,6 +3,8 @@
 //jQueryを導入、$に格納（以降、本ファイルの$はjQueryライブラリが入っています）
 import $ from 'jquery';
 
+import io from 'socket.io-client';
+
 /* 
   canvasタグについて
   https://developer.mozilla.org/ja/docs/Web/API/Canvas_API
@@ -25,6 +27,12 @@ const gameObj = {
   myDisplayName: $('#main').attr('data-displayName'),  //data-*でグローバル変数として設定
   myThumbUrl: $('#main').attr('data-thumbUrl')  //data-*でグローバル変数として設定
 };
+
+//websocketで通信するデータ(twitterのアカウント名とサムネイルURL)を設定
+const socketQueryParameters = `displayName=${gameObj.myDisplayName}&thumbUrl=${gameObj.myThumbUrl}`;
+
+//サーバのIPアドレスにwebsocket通信を開始要求リクエスト＆データ(twitterのアカウント名とサムネイルURL)も送る
+const socket = io($('#main').attr('data-ipAddress') + '?' + socketQueryParameters);
 
 
 //最初に実行して欲しい処理をまとめた関数
@@ -118,6 +126,22 @@ function drawSubmarine(ctxRader) {
 
   ctxRader.restore();
 };
+
+
+/* 
+  socket.on('イベント名', 関数) でWebSocketデータを受信した時の処理を実装。
+
+  Socket.IO で行う通信は通信に名前が付いており、
+  socket.on('start data', (startObj) => {} は start data という名前のデータを受け取ったときに実行され、 
+  socket.on('map data', (compressed) => {} は map data という名前のデータを受け取ったときに実行される。
+*/
+socket.on('start data', (startObj) => {
+  console.log('start data came');
+});
+
+socket.on('map data', (compressed) => {
+  console.log('map data came');
+});
 
 
 //角度をラジアンに変換する関数

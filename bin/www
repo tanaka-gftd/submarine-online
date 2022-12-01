@@ -88,3 +88,9 @@ function onListening() {
     : 'port ' + addr.port;
   debug('Listening on ' + bind);
 }
+
+//サーバ起動時にWebSocketサーバも起動するようにする
+const io = require('socket.io')(server);
+const game = require('../game_server/game');
+const webSocketServer = require('../game_server/webSocketServer');
+webSocketServer.createWebSocketServer(io, game);  // WebSocketサーバ起動
