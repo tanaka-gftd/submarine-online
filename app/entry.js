@@ -11,21 +11,27 @@ import io from 'socket.io-client';
 */
 
 /* 
-  キャンバス全体を削除　（参考）https://developer.mozilla.org/ja/docs/Web/API/CanvasRenderingContext2D/clearRect
+  キャンバス全体を削除 （参考）https://developer.mozilla.org/ja/docs/Web/API/CanvasRenderingContext2D/clearRect
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 */
 
-//ゲームで扱う値を、オブジェクトで設定
+//ゲームを描画する時に使用する値を、オブジェクトで設定
 const gameObj = {
   raderCanvasWidth: 500,
   raderCanvasHeight: 500,
   scoreCanvasWidth: 300,
   scoreCanvasHeight: 500,
+  itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）をせってお
+  airRadius: 5,  //ミサイルアイテムの大きさ（円で描画するので半径）をせってお
   deg: 0,
   myDisplayName: $('#main').attr('data-displayName'),  //data-*でグローバル変数として設定
-  myThumbUrl: $('#main').attr('data-thumbUrl')  //data-*でグローバル変数として設定
+  myThumbUrl: $('#main').attr('data-thumbUrl'),  //data-*でグローバル変数として設定
+  fieldWidth: null,
+  fieldHeight: null,
+  itemsMap: new Map(),
+  airMap: new Map()
 };
 
 //websocketで通信するデータ(twitterのアカウント名とサムネイルURL)を設定
@@ -132,15 +138,81 @@ function drawSubmarine(ctxRader) {
   socket.on('イベント名', 関数) でWebSocketデータを受信した時の処理を実装。
 
   Socket.IO で行う通信は通信に名前が付いており、
-  socket.on('start data', (startObj) => {} は start data という名前のデータを受け取ったときに実行され、 
-  socket.on('map data', (compressed) => {} は map data という名前のデータを受け取ったときに実行される。
+  socket.on('start data', (startObj) => {} は start data という名前のデータを受け取ったときに実行される
 */
+//フロントでの描画のために、WebSocketサーバから受け取った値(ゲームの横幅と縦幅、プレイヤー情報)を保存
 socket.on('start data', (startObj) => {
-  console.log('start data came');
+
+  //引数で受け取ったオブジェクトから、各値を取り出す
+  /* 引数の中身 {playerObj: playerObj, fieldWidth: gameObj.fieldWidth, fieldHeight: gameObj.fieldHeight}; */
+  gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
+  gameObj.fieldHeight = startObj.fieldHeight;  //ゲームの縦幅
+  gameObj.myPlayerObj = startObj.playerObj;  //プレイヤーデータを持ったオブジェクト
 });
 
+
+//socket.on('map data', (compressed) => {} は map data という名前のデータを受け取ったときに実行される
+//フロントでの描画のために、WebSocketサーバから受け取った値(ゲームの現在の状態、ミサイルアイテムの座標、酸素アイテムの座標)を保存、更新
 socket.on('map data', (compressed) => {
-  console.log('map data came');
+
+  /* 
+    引数として受け取るのは2重配列 構造 → [playersArray, itemsArray, airArray]
+    playersArray...参加プレイヤーの各情報を格納した配列
+    itemsArray...ミサイルアイテムの座標を格納した配列
+    airArray...酸素アイテムの座標を格納した配列
+  */
+  const playersArray = compressed[0];
+  const itemsArray = compressed[1];
+  const airArray = compressed[2];
+
+  //新しいmapを作成し、playersMapと命名し、gameObjに追加
+  gameObj.playersMap = new Map();
+
+  //WebSocketサーバから受け取ったプレイヤーの各情報をオブジェクトとして保存 → ゲーム内容更新、をプレイヤーの人数分繰り返す
+  for(let compressedPlayerData of playersArray) {
+
+    //WebSocketサーバから受け取ったプレイヤーの各情報を、配列から取り出してオブジェクトへ格納
+    const player = {};
+    player.x = compressedPlayerData[0];
+    player.y = compressedPlayerData[1];
+    player.playerId = compressedPlayerData[2];
+    player.displayName = compressedPlayerData[3];
+    player.score = compressedPlayerData[4];
+    player.isAlive = compressedPlayerData[5];
+    player.direction = compressedPlayerData[6];
+
+    //gameObjのplayersMapに、WebSocketサーバから受け取ったプレイヤーの各情報を追加()
+    gameObj.playersMap.set(player.playerId, player);
+
+    //ゲームの現在の状態を示す各値を更新していく
+    //player.playerId ...WebSocketサーバから受け取ったプレイヤーのID
+    //gameObj.myPlayerObj.playerId...ゲーム開始時に作成されたプレイヤーのID
+    if(player.playerId === gameObj.myPlayerObj.playerId) {
+      gameObj.myPlayerObj.x = compressedPlayerData[0];
+      gameObj.myPlayerObj.y = compressedPlayerData[1];
+      gameObj.myPlayerObj.displayName = compressedPlayerData[3];
+      gameObj.myPlayerObj.score = compressedPlayerData[4];
+      gameObj.myPlayerObj.isAlive = compressedPlayerData[5];
+    }
+  };
+
+  //ミサイルアイテムの出現順とその出現座標を格納したmapを、gameObjに追加
+  gameObj.itemsMap = new Map();
+  itemsArray.forEach((compressedItemData, index) => {
+    gameObj.itemsMap.set(index, {x:compressedItemData[0], y:compressedItemData[1]});
+  });
+
+  //酸素アイテムの出現順とその出現座標を格納したmapを、gameObjに追加
+  gameObj.airMap = new Map();
+  airArray.forEach((compressedAirData, index) => {
+    gameObj.airMap.set(index, {x:compressedAirData[0], y:compressedAirData[1]});
+  });
+
+  //確認用
+  console.log(gameObj.playersMap);  //プレイヤーID(key)と、そのプレイヤーの現在の状態(value)
+  console.log(gameObj.itemsMap);  //ミサイルアイテムの出現番号(key)と、それに対応した出現座標(value)
+  console.log(gameObj.airMap);  //酸素アイテムの出現番号(key)と、それに対応した出現座標(value)
+
 });
 
 

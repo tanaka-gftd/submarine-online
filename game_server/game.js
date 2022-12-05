@@ -18,6 +18,8 @@ const gameObj = {
 
 
 //ゲームの初期設定をする関数
+//ミサイルアイテムと酸素アイテムを、gameObjに設定した個数だけ追加していく
+//追加先はそれぞれ、gameObj.itemsMap と gameObj.airMap
 function init() {
   for(let i = 0; i < gameObj.itemTotal; i++){
     addItem();
@@ -108,7 +110,7 @@ function getMapData() {
     airArray.push(airDataForSend);
   }
 
-  return [playersArray, itemsArray, airArray];
+  return [playersArray, itemsArray, airArray];  //2重配列を返す
 };
 
 
