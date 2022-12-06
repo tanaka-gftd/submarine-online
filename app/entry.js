@@ -19,12 +19,12 @@ import io from 'socket.io-client';
 
 //ゲームを描画する時に使用する値を、オブジェクトで設定
 const gameObj = {
-  raderCanvasWidth: 500,
-  raderCanvasHeight: 500,
+  raderCanvasWidth: 500,  //レーダーに表示できる横幅
+  raderCanvasHeight: 500,  //レーダーに表示できる縦幅
   scoreCanvasWidth: 300,
   scoreCanvasHeight: 500,
-  itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）をせってお
-  airRadius: 5,  //ミサイルアイテムの大きさ（円で描画するので半径）をせってお
+  itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）を設定
+  airRadius: 5,  //酸素アイテムの大きさ（円で描画するので半径）を設定
   deg: 0,
   myDisplayName: $('#main').attr('data-displayName'),  //data-*でグローバル変数として設定
   myThumbUrl: $('#main').attr('data-thumbUrl'),  //data-*でグローバル変数として設定
@@ -66,8 +66,13 @@ init();
 
 //キャンバスの中身を削除 → レーダーを描画、潜水艦を描画、という処理
 function ticker() {
+
+  //サーバからデータを受けっとていないときは、マップを描画しない(if文を簡略化して記述してます)
+  if (!gameObj.myPlayerObj || !gameObj.playersMap) return;  
+
   gameObj.ctxRader.clearRect(0, 0, gameObj.raderCanvasWidth, gameObj.raderCanvasHeight);  //ゲーム用のキャンバスの中身を削除
   drawRader(gameObj.ctxRader);  //レーダーを描画
+  drawMap(gameObj);  //マップを描画
   drawSubmarine(gameObj.ctxRader);  //潜水艦を描画
 };
 
@@ -106,7 +111,7 @@ function drawRader(ctxRader) {
   //弧の端から原点(0, 0)に向かって線を引く
   ctxRader.lineTo(0, 0);
 
-  //描画したエリアを塗りつぶす →　扇の描画の完了
+  //描画したエリアを塗りつぶす → 扇の描画の完了
   ctxRader.fill();
 
   //座標の状態を、ctxRader.save();で保存していた設定に戻す
@@ -209,9 +214,9 @@ socket.on('map data', (compressed) => {
   });
 
   //確認用
-  console.log(gameObj.playersMap);  //プレイヤーID(key)と、そのプレイヤーの現在の状態(value)
-  console.log(gameObj.itemsMap);  //ミサイルアイテムの出現番号(key)と、それに対応した出現座標(value)
-  console.log(gameObj.airMap);  //酸素アイテムの出現番号(key)と、それに対応した出現座標(value)
+  // console.log(gameObj.playersMap);  //プレイヤーID(key)と、そのプレイヤーの現在の状態(value)
+  // console.log(gameObj.itemsMap);  //ミサイルアイテムの出現番号(key)と、それに対応した出現座標(value)
+  // console.log(gameObj.airMap);  //酸素アイテムの出現番号(key)と、それに対応した出現座標(value)
 
 });
 
@@ -220,4 +225,162 @@ socket.on('map data', (compressed) => {
 //「角度 * π / 180」という計算式で、ラジアンに変換できる
 function getRadian(deg) {
   return deg * Math.PI /180;
+};
+
+
+//マップを描画する関数
+function drawMap(gameObj) {
+
+  /* 「それぞれのMapに格納された情報から適切な点を描画する」という処理は共通化できるので、関数drawObjにまとめた */
+  drawObj(gameObj.itemsMap, 255, 165, 0);
+  drawObj(gameObj.airMap, 0, 220, 225);
+};
+
+
+//それぞれのMapに格納された情報から適切な点を描画する関数
+//objには、gameObj.itemsMap か、gameObj.airMap が渡される
+function drawObj(obj, r, g, b) {
+
+  //引数で受け取ったobj()をループしてアイテムを描画
+  for(let [index, item] of obj) {
+
+    //2点間の距離を測る関数（別で実装）
+    const distanceObj = calculationBetweenTwoPoints(
+      gameObj.myPlayerObj.x, gameObj.myPlayerObj.y,  //プレイヤーの座標
+      item.x, item.y,  //アイテムの座標
+      gameObj.fieldWidth, gameObj.fieldHeight,
+      gameObj.raderCanvasWidth, gameObj.raderCanvasHeight
+    );
+
+    //レーダーの届く距離にあるアイテムだけを描画 & レーダーに近いアイテムはくっきり描画、レーダーから離れたアイテムは透明度をあげて描画（うっすら描画）ようにする
+    if(distanceObj.distanceX <= (gameObj.raderCanvasWidth /2) && distanceObj.distanceY <= (gameObj.raderCanvasHeight / 2)) {
+      const degreeDiff = calcDegreeDiffFromRader(gameObj.deg, distanceObj.degree);  //潜水艦から見たレーダーとアイテムの角度の差を計算し、その結果を保存（関数は別で実装）
+      const toumeido = calcOpacity(degreeDiff);
+
+      gameObj.ctxRader.fillStyle = `rgba(${r}, ${g}, ${b}, ${toumeido})`;
+      gameObj.ctxRader.beginPath();
+      gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, gameObj.itemRadius, 0, Math.PI * 2, true);
+      gameObj.ctxRader.fill();
+    }
+  }
+};
+
+
+//2つの物の距離を計算する関数
+//引数として必要になるのは、潜水艦と対象アイテムのそれぞれのX座標とY座標、ゲーム全体の横幅と縦幅、画面に表示されているエリアの横幅と縦幅
+function calculationBetweenTwoPoints(pX, pY, oX, oY, gameWidth, gameHeight, raderCanvasWidth, raderCanvasHeight) {
+  
+  /* 
+    今回のマップは地球のように端と端が繋がっている。
+    なので、左右の両方から距離を計算し、より近かった距離が実際の距離になる。
+    上下の距離においても同様。
+
+    「raderCanvasWidth / 2」や「raderCanvasHeight / 2」は、ゲーム表示エリアの左下を原点とした場合の、
+    それぞれ潜水艦のいる位置のX座標、Y座標を表す（潜水艦は表示エリアの中央に常に位置しているので）
+  */
+  
+  let distanceX = 99999999;  //仮の値として設定(gameObj.fieldWidth以上の値なら何でもいいはず)
+  let distanceY = 99999999;  //仮の値として設定(gameObj.fieldHeight以上の値なら何でもいいはず)
+  let drawX = null;
+  let drawY = null;
+
+  if(pX <= oX) {
+
+    //右方向での距離
+    distanceX = oX - pX;
+    drawX = (raderCanvasWidth / 2) + distanceX;
+
+    //左方向での距離
+    let tmpDistance = pX + gameWidth - oX;
+
+    //右からの距離のほうが遠かった場合は、左からの距離を使用
+    if(distanceX > tmpDistance) {
+      distanceX = tmpDistance;
+      drawX = (raderCanvasWidth / 2) - distanceX;
+    }
+  } else {
+
+    //右方向での距離
+    distanceX = pX - oX;
+    drawX = (raderCanvasWidth / 2) - distanceX;
+
+    //左方向での距離
+    let tmpDistance = oX + gameWidth - pX;
+    if(distanceX > tmpDistance) {
+      distanceX = tmpDistance;
+      drawX = (raderCanvasWidth / 2) + distanceX;
+    }
+  };
+
+  //X座標の時と同じように求める
+  if(pY <= oY) {
+
+    //下方向での距離
+    distanceY = oY - pY;
+    drawY = (raderCanvasHeight / 2) + distanceY;
+
+    //上方向での距離
+    let tmpDistance = pY + gameHeight - oY;
+    if(distanceY > tmpDistance) {
+      distanceY = tmpDistance;
+      drawY = (raderCanvasHeight / 2) - distanceY;
+    }
+  } else {
+
+    //下方向での距離
+    distanceY = pY - oY;
+    drawY = (raderCanvasHeight / 2) - distanceY;
+
+    //上方向での距離
+    let tmpDistance = oY + gameHeight - pY;
+    if(distanceY > tmpDistance) {
+      distanceY = tmpDistance;
+      drawY = (raderCanvasHeight / 2) + distanceY;
+    }
+  };
+
+  //角度を求める
+  const degree = calcTwoPointsDegree(drawX, drawY, raderCanvasWidth / 2, raderCanvasHeight / 2);
+
+  //確認用
+  //console.log(`distanceX: ${distanceX}, distanceY: ${distanceY}, drawX: ${drawX}, drawY: ${drawY}, degree: ${degree}`);
+
+  return {
+    distanceX,  //潜水艦と対象アイテムのX座標の差(絶対値)
+    distanceY,  //潜水艦と対象アイテムのY座標の差(絶対値)
+    drawX,  //ゲーム表示エリア内において、ゲーム表示エリア左下を原点とした場合の対象アイテムのX座標？
+    drawY,  //ゲーム表示エリア内において、ゲーム表示エリア左下を原点とした場合の対象アイテムのY座標？
+    degree
+  };
+};
+
+
+//2点間の角度を求める関数（潜水艦から見た時のアイテムの角度を求める）
+//潜水艦（原点扱い）と対象物を結んだ半直線と、正のX軸が作る角を求める
+function calcTwoPointsDegree(x1, y1, x2, y2) {
+  const radian = Math.atan2(y2 - y1, x2 - x1);
+  const degree = radian * 180 / Math.PI +180;
+  return degree;
+};
+
+
+//潜水艦のレーダーとアイテムとの角度の差を求める関数
+//レーダーが通ったばかりのアイテムは距離が近く、徐々に反応が薄くなっていく少し特殊な差分計算
+function calcDegreeDiffFromRader(degRader, degItem) {
+  let diff = degRader - degItem;
+  if(diff < 0) {
+    diff += 360;
+  }
+  return diff;
+};
+
+
+//レーダーとの距離（角度の差）からアイテムを描画する時の透明度を計算する関数
+//1が完全に透明で、0 ~ 1の値を設定
+//レーダーとの距離（角度の差）の割合だけ1から引いていき、レーダーとの距離が無いとき1-1で透明度は0となる
+//レーダーとの距離が270度以上なら、透明度1で消えるように
+function calcOpacity(degreeDiff) {
+  const deleteDeg = 270;
+  degreeDiff = degreeDiff > deleteDeg ? deleteDeg : degreeDiff;
+  return (1 - degreeDiff / deleteDeg).toFixed(2);
 };
