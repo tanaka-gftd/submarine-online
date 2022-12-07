@@ -35,6 +35,12 @@ function init() {
 init();  //ゲームの初期化（初期化はサーバ起動時に行う）
 
 
+//サーバーで潜水艦を移動させる処理を33ミリ秒ごとに呼び出す
+const gameTicker = setInterval(() => {
+  movePlayers(gameObj.playersMap);
+}, 33);
+
+
 //新しい接続を作り、ユーザをゲームに参加させ、ゲームの現在の状態を返す
 function newConnection(socketId, displayName, thumbUrl) {
 
@@ -175,6 +181,42 @@ function addAir() {
 
   //酸素アイテムの出現座標をキーとセットにしてgameObj.airMapに追加
   gameObj.airMap.set(airKey, airObj);
+};
+
+
+//潜水艦を移動する処理
+function movePlayers(playersMap) {
+
+  //全てのプレイヤーで行うのでループ
+  for(let [playerId, player] of playersMap) {
+
+    //当該プレイヤーがゲームオーバーになった場合は、次のループ（次のユーザ）に移る
+    if(player.isAlive === false) {
+      continue;
+    };
+
+    //潜水艦の向きに応じて、潜水艦の座標を変更する（これで"潜水艦の移動"が実現できる）
+    switch (player.direction) {
+      case 'left':
+        player.x -= 1;
+        break;
+      case 'up':
+        player.y -= 1;
+        break;
+      case 'down':
+        player.y += 1;
+        break;
+      case 'right':
+        player.x += 1;
+        break;
+    }
+
+    //今回のマップは地球のように端と端が繋がっているので、座標がゲームの横幅と縦幅を超えたor0以下になったなら、反対の端へ移動
+    if(player.x > gameObj.fieldWidth) player.x -= gameObj.fieldWidth;
+    if(player.x < 0) player.x += gameObj.fieldWidth;
+    if(player.y < 0) player.y += gameObj.fieldHeight;
+    if(player.y > gameObj.fieldHeight) player.y -= gameObj.fieldHeight;
+  };
 };
 
 
