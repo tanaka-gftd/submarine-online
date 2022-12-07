@@ -1,3 +1,6 @@
+/* ゲームの設定、マップの作成など */
+
+
 'use strict';
 
 //ハッシュ計算用ライブラリの読み込み
@@ -7,7 +10,7 @@ const crypto = require('crypto');
 //ゲームで使用する値を格納するオブジェクト
 /* ゲームに設定で必要になった値は、このgameObjに設定していく */
 const gameObj = {
-  playersMap: new Map(),  //ゲームに参加しているプレイヤーの情報を入れておく連想配列
+  playersMap: new Map(),  //ゲームに参加しているプレイヤー全員の情報を入れておく連想配列
   itemsMap: new Map(),  //ミサイル（魚雷）のアイテム情報を入れておく連想配列
   airMap: new Map(),  //酸素のアイテム情報を入れておく連想配列
   fieldWidth: 1000,  //ゲームの横幅
@@ -54,7 +57,8 @@ function newConnection(socketId, displayName, thumbUrl) {
     score: 0  //得点（初期は0点）
   };
 
-  //socketIdとplayerObjを、gameObj.playerMap連想配列に追加
+  //socketIdとplayerObjを、gameObj.playersMap連想配列に追加
+  //socketIdによって、ユーザを区別する
   gameObj.playersMap.set(socketId, playerObj);
 
   //ゲームの設定などをオブジェクトに入れて、リターンで返す
@@ -111,6 +115,13 @@ function getMapData() {
   }
 
   return [playersArray, itemsArray, airArray];  //2重配列を返す
+};
+
+
+//潜水艦の進行方向を変える関数
+function updatePlayerDirection(socketId, direction) {
+  const playerObj = gameObj.playersMap.get(socketId);  //socketIdを元に、方向変換するユーザデータを取り出す
+  playerObj.direction = direction;  //方向を変更
 };
 
 
@@ -171,5 +182,6 @@ function addAir() {
 module.exports = {
   newConnection,
   getMapData,
+  updatePlayerDirection,
   disconnect
 };

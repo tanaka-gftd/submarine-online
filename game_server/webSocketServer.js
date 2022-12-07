@@ -22,6 +22,12 @@ function createWebSocketServer(io, game) {
     const startObj = game.newConnection(socket.id, displayName, thumbUrl);
     socket.emit('start data', startObj);
 
+    //change directionというメッセージを受け取った時の処理
+    //プレイヤー(socketIDで区別)の方向を変更するための関数を呼び出す
+    socket.on('change direction', (direction) => {
+      game.updatePlayerDirection(socket.id, direction);
+    });
+
     //ユーザが接続を切断をした時に実行
     socket.on('disconnect', () => {
       //game.disconnectは、プレイヤーが接続を切った時に実行する関数として、別で実装

@@ -1,3 +1,6 @@
+/* ゲームのフロントサイド（描画） */
+
+
 'use strict';
 
 //jQueryを導入、$に格納（以降、本ファイルの$はjQueryライブラリが入っています）
@@ -26,6 +29,12 @@ const gameObj = {
   itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）を設定
   airRadius: 5,  //酸素アイテムの大きさ（円で描画するので半径）を設定
   deg: 0,
+  rotationDegreeByDirection: {  //潜水艦の画像の描画する向き(角度は時計回り？)
+    'left': 0,  //左方向は別で定義
+    'up': 270,  //上向き
+    'down': 90,  //下向き
+    'right': 0  //右向き（初期値）
+  },
   myDisplayName: $('#main').attr('data-displayName'),  //data-*でグローバル変数として設定
   myThumbUrl: $('#main').attr('data-thumbUrl'),  //data-*でグローバル変数として設定
   fieldWidth: null,
@@ -73,7 +82,7 @@ function ticker() {
   gameObj.ctxRader.clearRect(0, 0, gameObj.raderCanvasWidth, gameObj.raderCanvasHeight);  //ゲーム用のキャンバスの中身を削除
   drawRader(gameObj.ctxRader);  //レーダーを描画
   drawMap(gameObj);  //マップを描画
-  drawSubmarine(gameObj.ctxRader);  //潜水艦を描画
+  drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);  //潜水艦を描画
 };
 
 //ticker関数を、33ミリ秒ごとに実行
@@ -122,13 +131,22 @@ function drawRader(ctxRader) {
 };
 
 
-//潜水艦を描画する関数
-//（こちらも繰り返すようだ）
-function drawSubmarine(ctxRader) {
+//潜水艦を描画する関数（こちらも繰り返すようだ）
+//方向転換時に潜水艦の画像の向きも変更できるように
+function drawSubmarine(ctxRader, myPlayerObj) {
+
+  //潜水艦の画像を回転させたい角度
+  const rotationDegree = gameObj.rotationDegreeByDirection[myPlayerObj.direction];
 
   //座標を中心に設定するので、canvasの状態を ctxRader.save();で保存し、ctxRader.translateで座標をcanvasの中心に設定する
   ctxRader.save();
   ctxRader.translate(gameObj.raderCanvasWidth / 2, gameObj.raderCanvasHeight / 2);
+
+  //潜水艦の画像を回転させる（左向きの場合は、画像を左右反転させる）
+  ctxRader.rotate(getRadian(rotationDegree));
+  if(myPlayerObj.direction === 'left') {
+    ctxRader.scale(-1, 1);
+  }
 
   //潜水艦の画像を表示する位置を設定
   ctxRader.drawImage(
@@ -383,4 +401,52 @@ function calcOpacity(degreeDiff) {
   const deleteDeg = 270;
   degreeDiff = degreeDiff > deleteDeg ? deleteDeg : degreeDiff;
   return (1 - degreeDiff / deleteDeg).toFixed(2);
+};
+
+
+//キーボードで入力されたキーに応じて、潜水艦を方向転換させる関数
+//jQueryの機能でキー入力があった場合に実行
+$(window).on("keydown", (event) => {
+
+  //gameObj.myPlayerObj変数がない場合(用意できていない場合)や、ゲームオーバの場合は処理を抜ける
+  if(!gameObj.myPlayerObj || gameObj.myPlayerObj.isAlive === false) return;
+
+  //入力があったキーによって処理を分岐
+  /* 
+    キーボードで入力された方向キーと、潜水艦の向きが同じ場合は何もせず、
+    そうでない場合は、潜水艦の向きをキーボードで入力された方向に設定＆潜水艦を再描画し、
+    サーバーに対して方向が変わったことを送信する
+  */
+  switch(event.key) {
+    case 'ArrowLeft': 
+      if (gameObj.myPlayerObj.direction === 'left') break;
+      gameObj.myPlayerObj.direction = 'left';
+      drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
+      sendChangeDirection(socket, 'left');
+      break;
+    case 'ArrowUp': 
+      if (gameObj.myPlayerObj.direction === 'up') break;
+      gameObj.myPlayerObj.direction = 'up';
+      drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
+      sendChangeDirection(socket, 'up');
+      break;
+    case 'ArrowDown': 
+      if (gameObj.myPlayerObj.direction === 'down') break;
+      gameObj.myPlayerObj.direction = 'down';
+      drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
+      sendChangeDirection(socket, 'down');
+      break;
+    case 'ArrowRight': 
+      if (gameObj.myPlayerObj.direction === 'right') break;
+      gameObj.myPlayerObj.direction = 'right';
+      drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
+      sendChangeDirection(socket, 'right');
+      break;
+  }
+});
+
+
+//サーバに潜水艦の方向転換を送信する関数
+function sendChangeDirection(socket, direction) {
+  socket.emit('change direction', direction);
 };
