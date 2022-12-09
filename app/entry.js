@@ -332,7 +332,7 @@ function drawMap(gameObj) {
       //他プレイヤー名の表示方法を設定(プレイヤー名表示処理の共通部分を抜き出して関数化)
       function showEnemyName() {
         gameObj.ctxRader.strokeStyle = `rgba(250, 250, 250, ${toumeido})`;
-        gameObj.ctxRader.fillStyle = `rgba(250, 250, 250. ${toumeido})`;
+        gameObj.ctxRader.fillStyle = `rgba(250, 250, 250, ${toumeido})`;
         gameObj.ctxRader.beginPath();
         gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
         gameObj.ctxRader.lineTo(distanceObj.drawX + 20, distanceObj.drawY - 20);
