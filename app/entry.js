@@ -338,7 +338,7 @@ function drawMap(gameObj) {
         gameObj.ctxRader.lineTo(distanceObj.drawX + 20, distanceObj.drawY - 20);
         gameObj.ctxRader.lineTo(distanceObj.drawX + 20 + 40, distanceObj.drawY - 20);
         gameObj.ctxRader.stroke();
-        gameObj.ctxRader.font = '8px Arial';
+        gameObj.ctxRader.font = '16px Arial';
       };
 
       //他プレイヤー名を表示していく
