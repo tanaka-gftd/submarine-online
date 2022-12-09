@@ -70,6 +70,7 @@ function newConnection(socketId, displayName, thumbUrl) {
     missilesMany: 0,  //ミサイルアイテム所持数
     airTime: 99,  //酸素所持量
     aliveTime: {'clock': 0, 'seconds': 0},  //プレイヤーの生存時間
+    deadCount: 0,  //爆破されてからの経過時間
     score: 0  //得点（初期は0点）
   };
 
@@ -110,6 +111,7 @@ function getMapData() {
     playerDataForSend.push(player.direction);
     playerDataForSend.push(player.missilesMany);
     playerDataForSend.push(player.airTime);
+    playerDataForSend.push(player.deadCount);
 
     playersArray.push(playerDataForSend);
   };
@@ -202,9 +204,15 @@ function movePlayers(playersMap) {
   //全てのプレイヤーで行うのでループ
   for(let [playerId, player] of playersMap) {
 
-    //当該プレイヤーがゲームオーバーになった場合は、次のループ（次のユーザ）に移る
+    //爆発イラストを使用したアニメーションのために、爆破されてからの時間をカウント
+    //ゲームオーバーになった場合は、次のループ（次のユーザ）に移る
     if(player.isAlive === false) {
-      continue;
+      if(player.deadCount < 70) {
+        player.deadCount += 1;
+      } else {
+        gameObj.playersMap.delete(playerId);
+      }
+      continue;  //次のループへ
     };
 
     //潜水艦の向きに応じて、潜水艦の座標を変更する（これで"潜水艦の移動"が実現できる）

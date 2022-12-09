@@ -28,6 +28,7 @@ const gameObj = {
   scoreCanvasHeight: 500,
   itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）を設定
   airRadius: 5,  //酸素アイテムの大きさ（円で描画するので半径）を設定
+  bomCellPx: 32,  //爆発のリスト画像のうち、一つ分のサイズ
   deg: 0,
   counter: 0,  //カウント用変数
   rotationDegreeByDirection: {  //潜水艦の画像の描画する向き(角度は時計回り？)
@@ -74,6 +75,10 @@ function init() {
   //ミサイルの画像
   gameObj.missileImage = new Image();
   gameObj.missileImage.src = '/images/missile.png';
+
+  //爆発の画像集
+  gameObj.bomListImage = new Image();
+  gameObj.bomListImage.src = '/images/bomlist.png';
 };
 
 init();
@@ -90,6 +95,11 @@ function ticker() {
   drawMap(gameObj);  //マップを描画
   drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);  //潜水艦を描画
 
+  //酸素残量０、もしくは、敵に爆破された時、ゲームオーバーの文字をプレイヤーに提示する
+  if(gameObj.myPlayerObj.isAlive === false && gameObj.myPlayerObj.deadCount > 60) {
+    drawGameOver(gameObj.ctxRader);
+  };
+
   //スコアエリアに表示する、酸素残量とミサイルアイコン
   gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight);
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
@@ -101,6 +111,15 @@ function ticker() {
 
 //ticker関数を、33ミリ秒ごとに実行
 setInterval(ticker, 33);
+
+function drawGameOver(ctxRader) {
+  ctxRader.font = 'bold 76px arial black';
+  ctxRader.fillStyle = "rgb(0, 220, 250)";
+  ctxRader.fillText('Game Over', 20, 270);
+  ctxRader.strokeStyle = "rgb(0, 0, 0)";
+  ctxRader.lineWidth = 3;
+  ctxRader.strokeText('Game Over', 20, 270);
+};
 
 
 //レーダーを描画する関数
@@ -149,6 +168,12 @@ function drawRader(ctxRader) {
 //方向転換時に潜水艦の画像の向きも変更できるように
 function drawSubmarine(ctxRader, myPlayerObj) {
 
+  //爆発アニメーション
+  if(myPlayerObj.isAlive === false) {
+    drawBom(ctxRader, gameObj.raderCanvasWidth / 2, gameObj.raderCanvasHeight / 2, myPlayerObj.deadCount);
+    return;
+  }
+
   //潜水艦の画像を回転させたい角度
   const rotationDegree = gameObj.rotationDegreeByDirection[myPlayerObj.direction];
 
@@ -168,6 +193,26 @@ function drawSubmarine(ctxRader, myPlayerObj) {
   );
 
   ctxRader.restore();
+};
+
+
+//爆発アニメーションを表示する関数
+function drawBom(ctxRader, drawX, drawY, deadCount) {
+  if(deadCount >= 60) return;
+
+  //6カウントごとに表示する爆発画像を入れ替えていくようにする
+  //爆発のリスト画像の中身を、一つずつ左上〜右上〜左下〜右下の順に表示していくようにする
+  const drawBomNumber = Math.floor(deadCount / 6);
+  const cropX = (drawBomNumber % (gameObj.bomListImage.width / gameObj.bomCellPx)) * gameObj.bomCellPx;
+  const cropY = Math.floor(drawBomNumber / (gameObj.bomListImage.width / gameObj.bomCellPx)) * gameObj.bomCellPx;
+
+  ctxRader.drawImage(
+    gameObj.bomListImage,
+    cropX, cropY,
+    gameObj.bomCellPx, gameObj.bomCellPx,
+    drawX - gameObj.bomCellPx / 2, drawY - gameObj.bomCellPx / 2,
+    gameObj.bomCellPx, gameObj.bomCellPx
+  );
 };
 
 
@@ -235,6 +280,7 @@ socket.on('map data', (compressed) => {
     player.direction = compressedPlayerData[6];
     player.missilesMany = compressedPlayerData[7];
     player.airTime = compressedPlayerData[8];
+    player.deadCount = compressedPlayerData[9];
 
     //gameObjのplayersMapに、WebSocketサーバから受け取ったプレイヤーの各情報を追加()
     gameObj.playersMap.set(player.playerId, player);
@@ -250,6 +296,7 @@ socket.on('map data', (compressed) => {
       gameObj.myPlayerObj.isAlive = compressedPlayerData[5];
       gameObj.myPlayerObj.missilesMany = compressedPlayerData[7];
       gameObj.myPlayerObj.airTime = compressedPlayerData[8];
+      gameObj.myPlayerObj.deadCount = compressedPlayerData[9];
     }
   };
 
@@ -298,7 +345,13 @@ function drawMap(gameObj) {
 
     //描画する敵機は、自機との距離がifの条件文を満たすものだけにする
     if(distanceObj.distanceX <= (gameObj.raderCanvasWidth / 2) && distanceObj.distanceY <= (gameObj.raderCanvasHeight / 2)) {
-      if(enemyPlayerObj.isAlive === false) {continue};  //ゲームオーバのプレイヤーは処理せず、次のループ(次のユーザーの処理)へ
+      
+      //ゲームオーバ時の処理
+      //ゲームオーバーの文字を表示させ、continueで次のプレイヤーの処理に移行する
+      if(enemyPlayerObj.isAlive === false) {
+        drawBom(gameObj.ctxRader, distanceObj.drawX, distanceObj.drawY, enemyPlayerObj.deadCount);
+        continue
+      };
 
       const degreeDiff = calcDegreeDiffFromRader(gameObj.deg, distanceObj.degree);
       const toumeido = calcOpacity(degreeDiff);
