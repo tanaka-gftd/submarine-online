@@ -29,6 +29,7 @@ const gameObj = {
   itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）を設定
   airRadius: 5,  //酸素アイテムの大きさ（円で描画するので半径）を設定
   deg: 0,
+  counter: 0,  //カウント用変数
   rotationDegreeByDirection: {  //潜水艦の画像の描画する向き(角度は時計回り？)
     'left': 0,  //左方向は別で定義
     'up': 270,  //上向き
@@ -93,6 +94,9 @@ function ticker() {
   gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight);
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
   drawMissiles(gameObj.ctxScore, gameObj.myPlayerObj.missilesMany);
+
+  //tickerが実行されるたびに1つ増やし、10000を超えたら0にリセット、そしてまたticker実行ごとに1つずつ増やす
+  gameObj.counter = (gameObj.counter + 1) % 10000;
 };
 
 //ticker関数を、33ミリ秒ごとに実行
@@ -278,6 +282,77 @@ function getRadian(deg) {
 
 //マップを描画する関数
 function drawMap(gameObj) {
+
+  //敵プレイヤーとNPCの描画
+  //参加プレイヤー全員を描画するので、for文でループ
+  for(let [key, enemyPlayerObj] of gameObj.playersMap) {
+    if(key === gameObj.myPlayerObj.playerId) {continue;}  //自分自身は他プレイヤーとして描画しない
+
+    //自機と敵機の距離を求める
+    const distanceObj = calculationBetweenTwoPoints(
+      gameObj.myPlayerObj.x, gameObj.myPlayerObj.y,
+      enemyPlayerObj.x, enemyPlayerObj.y,
+      gameObj.fieldWidth, gameObj.fieldHeight,
+      gameObj.raderCanvasWidth, gameObj.raderCanvasHeight
+    );
+
+    //描画する敵機は、自機との距離がifの条件文を満たすものだけにする
+    if(distanceObj.distanceX <= (gameObj.raderCanvasWidth / 2) && distanceObj.distanceY <= (gameObj.raderCanvasHeight / 2)) {
+      if(enemyPlayerObj.isAlive === false) {continue};  //ゲームオーバのプレイヤーは処理せず、次のループ(次のユーザーの処理)へ
+
+      const degreeDiff = calcDegreeDiffFromRader(gameObj.deg, distanceObj.degree);
+      const toumeido = calcOpacity(degreeDiff);
+
+      //4重円を作成して、それぞれに透明度や色を設定することで、レーダー内の敵機を波紋のようなアニメーションで表示する
+      const drawRadius = gameObj.counter % 12 + 2 + 12;
+      const clearRadius = drawRadius - 2;
+      const drawRadius2 = gameObj.counter % 12 + 2;
+      const clearRadius2 = drawRadius2 - 2;
+
+      gameObj.ctxRader.fillStyle = `rgba(0, 0, 255, ${toumeido})`;
+      gameObj.ctxRader.beginPath();
+      gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius, 0, Math.PI * 2, true);
+      gameObj.ctxRader.fill();
+
+      gameObj.ctxRader.fillStyle = `rgb(0, 20, 50)`;
+      gameObj.ctxRader.beginPath();
+      gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius, 0, Math.PI * 2, true);
+      gameObj.ctxRader.fill();
+
+      gameObj.ctxRader.fillStyle = `rgba(0, 0, 255, ${toumeido})`;
+      gameObj.ctxRader.beginPath();
+      gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius2, 0, Math.PI * 2, true);
+      gameObj.ctxRader.fill();
+
+      gameObj.ctxRader.fillStyle = `rgb(0, 20, 50)`;
+      gameObj.ctxRader.beginPath();
+      gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius2, 0, Math.PI * 2, true);
+      gameObj.ctxRader.fill();
+
+      //他プレイヤー名の表示方法を設定(プレイヤー名表示処理の共通部分を抜き出して関数化)
+      function showEnemyName() {
+        gameObj.ctxRader.strokeStyle = `rgba(250, 250, 250, ${toumeido})`;
+        gameObj.ctxRader.fillStyle = `rgba(250, 250, 250. ${toumeido})`;
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 20, distanceObj.drawY - 20);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 20 + 40, distanceObj.drawY - 20);
+        gameObj.ctxRader.stroke();
+        gameObj.ctxRader.font = '8px Arial';
+      };
+
+      //他プレイヤー名を表示していく
+      //他ユーザーがTwitterログインを行っていない場合と、行っている場合で分岐
+      //行っていないユーザーはanonymous、行っている場合はTwitterアカウント名で表示する
+      if(enemyPlayerObj.displayName === 'ゲストユーザー') {
+        showEnemyName();
+        gameObj.ctxRader.fillText('anonymous', distanceObj.drawX + 20, distanceObj.drawY - 20 - 1);
+      } else if (enemyPlayerObj.displayName) {
+        showEnemyName();
+        gameObj.ctxRader.fillText(enemyPlayerObj.displayName, distanceObj.drawX + 20, distanceObj.drawY - 20 -1);
+      }
+    }
+  }
 
   /* 「それぞれのMapに格納された情報から適切な点を描画する」という処理は共通化できるので、関数drawObjにまとめた */
   drawObj(gameObj.itemsMap, 255, 165, 0);
