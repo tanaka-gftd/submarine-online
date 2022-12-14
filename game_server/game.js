@@ -13,11 +13,14 @@ const gameObj = {
   playersMap: new Map(),  //ゲームに参加しているプレイヤー全員の情報を入れておく連想配列
   itemsMap: new Map(),  //ミサイル（魚雷）のアイテム情報を入れておく連想配列
   airMap: new Map(),  //酸素のアイテム情報を入れておく連想配列
+  NPCMap: new Map(),  //NPCを入れておくための連想配列
+  addingNPCPlayerNum: 9,  //参加人数がaddingNPCPlayerNum以下だと、NPCを追加するようにする
   flyingMissilesMap: new Map(),  //ゲーム内で発射されたミサイルの情報を格納するmap
   missileAliveFlame: 180,  //ミサイルの生存時間
   missileSpeed: 3,  //ミサイルの移動速度
   missileWidth: 30,  //ミサイルの当たり判定(横幅)
   missileHeight: 30,  //ミサイルの当たり判定(縦幅)
+  directions: ['left', 'up', 'down', 'right'],  //方向の文字列
   fieldWidth: 1000,  //ゲームの横幅
   fieldHeight: 1000,  //ゲームの横幅
   itemTotal: 15,  //ゲームに出現するミサイルのアイテム数
@@ -45,13 +48,47 @@ init();  //ゲームの初期化（初期化はサーバ起動時に行う）
 
 
 //サーバーで潜水艦を移動させる処理、とミサイルを移動させる処理、アイテム取得チェックする処理を33ミリ秒ごとに呼び出す
+//プレイヤーだけでなく、NPCも対象
 const gameTicker = setInterval(() => {
-  movePlayers(gameObj.playersMap);  //潜水艦の移動
+
+   //NPCの行動選択
+  NPCMoveDecision(gameObj.NPCMap);
+
+  //プレイヤーの情報を保存した連想配列と、NPCの連想配列を結合することで、移動処理や当たり判定の処理を同じ関数内で行えるようにする
+  const playersAndNPCMap = new Map(Array.from(gameObj.playersMap).concat(Array.from(gameObj.NPCMap)));
+  movePlayers(playersAndNPCMap);  //潜水艦の移動
   moveMissile(gameObj.flyingMissilesMap);  //ミサイルの移動
 
   //潜水艦とアイテム、潜水艦とミサイルの当たり判定チェック(アイテムに当たった場合は取得、ミサイルの場合は撃沈扱い)
-  checkGetItem(gameObj.playersMap, gameObj.itemsMap, gameObj.airMap, gameObj.flyingMissilesMap);  
+  checkGetItem(playersAndNPCMap, gameObj.itemsMap, gameObj.airMap, gameObj.flyingMissilesMap);
+
+  //参加プレイヤーの人数が少ない時はNPC追加
+  addNPC();
 }, 33);
+
+
+//NPCの行動設定
+//NPCの強さレベルによって処理を分岐させているが、アルゴリズムを考えるのは大変なので、ランダムに動作するレベル1のみ実装
+function NPCMoveDecision(NPCMap) {
+
+  //NPCごとに処理を行う
+  for (let [NPCId, NPCObj] of NPCMap) {
+    switch (NPCObj.level) {
+      case 1:
+        //ランダムなタイミングで、ランダムな方向に方向転換
+        if (Math.floor(Math.random() * 60) === 1){
+          NPCObj.direction = gameObj.directions[Math.floor(Math.random() * gameObj.directions.length)];
+        }
+        //ランダムなタイミングでミサイルを発射
+        if (NPCObj.missilesMany > 0 && Math.floor(Math.random() * 90) === 1) {
+          missileEmit(NPCObj.playerId, NPCObj.direction);
+        }
+        break;
+        case 2:
+        case 3:
+    }
+  }
+};
 
 
 //新しい接続を作り、ユーザをゲームに参加させ、ゲームの現在の状態を返す
@@ -106,9 +143,10 @@ function getMapData() {
   const itemsArray = [];
   const airArray = [];
   const flyingMissilesArray = [];
+  const playersAndNPCMap = new Map(Array.from(gameObj.playersMap).concat(Array.from(gameObj.NPCMap)));
 
   //プレイヤーの現在の情報
-  for(let [socketId, player] of gameObj.playersMap) {
+  for(let [socketId, player] of playersAndNPCMap) {
     const playerDataForSend = [];
 
     playerDataForSend.push(player.x);
@@ -171,9 +209,13 @@ function updatePlayerDirection(socketId, direction) {
 //ミサイルが発射されたことを、クライアントから通知を受けた時に実行する関数
 function missileEmit(socketId, direction) {
 
+  //プレイヤーだけでなくNPCの発射も扱えるようにする
+  const playersAndNPCMap = new Map(Array.from(gameObj.playersMap).concat(Array.from(gameObj.NPCMap)));
+
   //プレイヤーがミサイルを打てる状況下どうかを判定、打てない状況ならreturnで処理終了
-  if(!gameObj.playersMap.has(socketId)) return;
-  let emitPlayerObj = gameObj.playersMap.get(socketId);
+  //プレイヤーだけでなくNPCについても判定する
+  if(!playersAndNPCMap.has(socketId)) return;
+  let emitPlayerObj = playersAndNPCMap.get(socketId);
   if(emitPlayerObj.missilesMany <= 0) return;  //発射ボタンを押したプレイヤーのミサイルのストックが0なので、処理せず終了
   if(emitPlayerObj.isAlive === false) return;  //発射したプレイヤーがすでにやられていた場合は、処理せず終了
 
@@ -263,6 +305,7 @@ function movePlayers(playersMap) {
         player.deadCount += 1;
       } else {
         gameObj.playersMap.delete(playerId);
+        gameObj.NPCMap.delete(playerId);
       }
       continue;  //次のループへ
     };
@@ -344,7 +387,7 @@ function moveMissile(flyingMissilesMap) {
     if(flyingMissile.y > gameObj.fieldHeight) flyingMissile.y -= gameObj.fieldHeight;
   }
 };
-  
+
 
 //酸素の残り量(playerObj.airTime)を減らす
 //酸素の残り量が0になればゲームオーバー
@@ -432,6 +475,43 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
         flyingMissilesMap.delete(missileId);  //潜水艦に当たったミサイルは削除
       }
     }
+  }
+};
+
+
+//NPCを追加する処理
+function addNPC() {
+  //参加プレイヤーの人数+NPC数が、gameObj.addingNPCPlayerNumを下回っていたら実行
+  if(gameObj.playersMap.size + gameObj.NPCMap.size < gameObj.addingNPCPlayerNum) {
+
+    //追加すべきNPCの数を算出
+    const addMany = gameObj.addingNPCPlayerNum - gameObj.playersMap.size - gameObj.NPCMap.size;
+
+    //NPCプレイヤーを追加していく
+    for(let i = 0; i < addMany; i++) {
+
+      //NPCにゲームの初期設定(開始座標と潜水艦の向き、生存判定フラグ、残り酸素量、ミサイルのストックなど)とNPC設定(難易度やNPC名、ID)を渡す
+      const playerX = Math.floor(Math.random() * gameObj.fieldWidth);
+      const playerY = Math.floor(Math.random() * gameObj.fieldHeight);
+      const level = Math.floor(Math.random() * 1) + 1;
+      const id = Math.floor(Math.random() * 100000) + ',' + playerX + ',' + playerY + ',' + level;
+      const playerObj = {
+        x: playerX,
+        y: playerY,
+        isAlive: true,
+        deadCount: 0,
+        direction: 'right',
+        missilesMany: '0',
+        airTime: 99,
+        aliveTime: {'clock': 0, 'seconds': 0},
+        score: 0,
+        level: level,
+        displayName: 'NPC',
+        thumbUrl: 'NPC',
+        playerId: id
+      };
+      gameObj.NPCMap.set(id, playerObj);
+    } 
   }
 };
 
