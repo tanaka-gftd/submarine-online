@@ -22,8 +22,10 @@ import io from 'socket.io-client';
 
 //ゲームを描画する時に使用する値を、オブジェクトで設定
 const gameObj = {
-  raderCanvasWidth: 500,  //レーダーに表示できる横幅
-  raderCanvasHeight: 500,  //レーダーに表示できる縦幅
+  raderCanvasWidth: 500,  //レーダーに表示できる横幅(ゲームエリアに表示されるエリアの横幅) 
+  raderCanvasHeight: 500,  //レーダーに表示できる縦幅(ゲームエリアに表示されるエリアの縦幅)
+  /* 潜水艦は常にゲームエリアの中心にいるので、潜水艦からゲームエリアの端までは raderCanvasWidth/2 と raderCanvasHeight/2 となる*/
+
   scoreCanvasWidth: 300,
   scoreCanvasHeight: 500,
   itemRadius: 4,  //ミサイルアイテムの大きさ（円で描画するので半径）を設定
@@ -32,17 +34,24 @@ const gameObj = {
   deg: 0,
   counter: 0,  //カウント用変数
   rotationDegreeByDirection: {  //潜水艦の画像の描画する向き(角度は時計回り？)
-    'left': 0,  //左方向は別で定義
+    'left': 0,  //左方向は別で定義(180にすると、上下が反転してしまうので)
     'up': 270,  //上向き
     'down': 90,  //下向き
     'right': 0  //右向き（初期値）
+  },
+  rotationDegreeByFlyingMissileDirection: {  //ミサイルを描画する角度
+    'left': 270,
+    'up': 0,
+    'down': 180,
+    'right': 90
   },
   myDisplayName: $('#main').attr('data-displayName'),  //data-*でグローバル変数として設定
   myThumbUrl: $('#main').attr('data-thumbUrl'),  //data-*でグローバル変数として設定
   fieldWidth: null,
   fieldHeight: null,
   itemsMap: new Map(),
-  airMap: new Map()
+  airMap: new Map(),
+  flyingMissilesMap: new Map()  //ゲーム内で発射されたミサイルの情報を格納するmap(フロント用)
 };
 
 //websocketで通信するデータ(twitterのアカウント名とサムネイルURL)を設定
@@ -84,7 +93,8 @@ function init() {
 init();
 
 
-//キャンバスの中身を削除 → レーダーを描画、潜水艦を描画、という処理
+//キャンバスの中身を削除 → レーダーを描画、潜水艦を描画、クライアントでも潜水艦とミサイルを動かす、という処理
+//クライアントでも潜水艦とミサイルを動かせば、サーバとの通信が遅れてもスムーズに動作しているように見せることが可能となる
 function ticker() {
 
   //サーバからデータを受けっとていないときは、マップを描画しない(if文を簡略化して記述してます)
@@ -104,6 +114,9 @@ function ticker() {
   gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight);
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
   drawMissiles(gameObj.ctxScore, gameObj.myPlayerObj.missilesMany);
+
+  //潜水艦とミサイルの動きはシンプルなので、フロントでも動かせるようにする
+  moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap);
 
   //tickerが実行されるたびに1つ増やし、10000を超えたら0にリセット、そしてまたticker実行ごとに1つずつ増やす
   gameObj.counter = (gameObj.counter + 1) % 10000;
@@ -246,11 +259,12 @@ socket.on('start data', (startObj) => {
   gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
   gameObj.fieldHeight = startObj.fieldHeight;  //ゲームの縦幅
   gameObj.myPlayerObj = startObj.playerObj;  //プレイヤーデータを持ったオブジェクト
+  gameObj.missileSpeed = startObj.missileSpeed;  //ミサイルの速度
 });
 
 
 //socket.on('map data', (compressed) => {} は map data という名前のデータを受け取ったときに実行される
-//フロントでの描画のために、WebSocketサーバから受け取った値(ゲームの現在の状態、ミサイルアイテムの座標、酸素アイテムの座標)を保存、更新
+//フロントでの描画のために、WebSocketサーバから受け取った値(ゲームの現在の状態、ミサイルアイテムの座標、酸素アイテムの座標、発射されたミサイルの情報)を保存、更新
 socket.on('map data', (compressed) => {
 
   /* 
@@ -258,10 +272,12 @@ socket.on('map data', (compressed) => {
     playersArray...参加プレイヤーの各情報を格納した配列
     itemsArray...ミサイルアイテムの座標を格納した配列
     airArray...酸素アイテムの座標を格納した配列
+    flyingMissilesArray...発射されたミサイルの座標と進行方向、及び、発射したプレイヤーのIDを格納した配列
   */
   const playersArray = compressed[0];
   const itemsArray = compressed[1];
   const airArray = compressed[2];
+  const flyingMissilesArray = compressed[3];
 
   //新しいmapを作成し、playersMapと命名し、gameObjに追加
   gameObj.playersMap = new Map();
@@ -310,6 +326,17 @@ socket.on('map data', (compressed) => {
   gameObj.airMap = new Map();
   airArray.forEach((compressedAirData, index) => {
     gameObj.airMap.set(index, {x:compressedAirData[0], y:compressedAirData[1]});
+  });
+
+  //ミサイルの座標や進行方向、発射したプレイヤーのIDを格納したmapを、gameObjに追加
+  gameObj.flyingMissilesMap = new Map();
+  flyingMissilesArray.forEach((compressedFlyingMissileData, index) => {
+    gameObj.flyingMissilesMap.set(index, {
+      x: compressedFlyingMissileData[0],
+      y: compressedFlyingMissileData[1],
+      direction: compressedFlyingMissileData[2],
+      emitPlayerId: compressedFlyingMissileData[3]
+    });
   });
 
   //確認用
@@ -410,6 +437,100 @@ function drawMap(gameObj) {
   /* 「それぞれのMapに格納された情報から適切な点を描画する」という処理は共通化できるので、関数drawObjにまとめた */
   drawObj(gameObj.itemsMap, 255, 165, 0);
   drawObj(gameObj.airMap, 0, 220, 225);
+
+  //飛んでいるミサイルの描画
+  //全ての発射されたミサイルを表示するので、for文で回す
+  //ミサイルの表示するコードは、基本的な部分は潜水艦の表示と同じ
+  for(let [missileId, flyingMissile] of gameObj.flyingMissilesMap) {
+
+    //自機とミサイルの距離を求めて保存
+    const distanceObj = calculationBetweenTwoPoints(
+      gameObj.myPlayerObj.x, gameObj.myPlayerObj.y,
+      flyingMissile.x, flyingMissile.y,
+      gameObj.fieldWidth, gameObj.fieldHeight,
+      gameObj.raderCanvasWidth, gameObj.raderCanvasHeight
+    );
+
+    //描画するミサイルは、自機との距離が一定以下のものだけにする
+    if (distanceObj.distanceX <= (gameObj.raderCanvasWidth / 2 + 50) && distanceObj.distanceY <= (gameObj.raderCanvasHeight / 2 + 50)) {
+
+      //自分が発射したミサイルを描画
+      //自分が発射したミサイルは画像で表示する
+      if (flyingMissile.emitPlayerId === gameObj.myPlayerObj.playerId) {
+
+        const rotationDegree = gameObj.rotationDegreeByFlyingMissileDirection[flyingMissile.direction];
+        gameObj.ctxRader.save();
+        gameObj.ctxRader.translate(distanceObj.drawX, distanceObj.drawY);
+        gameObj.ctxRader.rotate(getRadian(rotationDegree));
+        gameObj.ctxRader.drawImage(
+          gameObj.missileImage, -gameObj.missileImage.width / 2, -gameObj.missileImage.height / 2
+        );
+        gameObj.ctxRader.restore();
+        gameObj.ctxRader.strokeStyle = "rgba(250, 250, 250, 0.9)";
+        gameObj.ctxRader.fillStyle = "rgba(250, 250, 250, 0.9)";
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 20, distanceObj.drawY - 20);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 20 + 35, distanceObj.drawY - 20);
+        gameObj.ctxRader.stroke();
+
+        gameObj.ctxRader.font = '16px Arial';
+        gameObj.ctxRader.fillText('ミサイル', distanceObj.drawX + 20, distanceObj.drawY - 20 - 2);
+
+      } else {  //他プレイヤーが発射したミサイルを描画(他プレイヤーのミサイルは危険信号のように赤い波紋で表示する)
+        const degreeDiff = calcDegreeDiffFromRader(gameObj.deg, distanceObj.degree);
+        const toumeido = calcOpacity(degreeDiff);
+
+        const drawRadius1 = gameObj.counter % 8 + 2 + 20;
+        const clearRadius1 = drawRadius1 - 2;
+        const drawRadius2 = gameObj.counter % 8 + 2 + 10;
+        const clearRadius2 = drawRadius2 - 2;
+        const drawRadius3 = gameObj.counter % 8 + 2 + 0;
+        const clearRadius3 = drawRadius3 - 2;
+
+        gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius1, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius1, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius2, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius2, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius3, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius3, 0, Math.PI * 2, true);
+        gameObj.ctxRader.fill();
+
+        gameObj.ctxRader.strokeStyle = `rgba(250, 250, 250, ${toumeido})`;
+        gameObj.ctxRader.fillStyle = `rgba(250, 250, 250, ${toumeido})`;
+        gameObj.ctxRader.beginPath();
+        gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 30, distanceObj.drawY - 30);
+        gameObj.ctxRader.lineTo(distanceObj.drawX + 30 + 35, distanceObj.drawY - 30);
+        gameObj.ctxRader.stroke();
+
+        gameObj.ctxRader.font = '16px Arial';
+        gameObj.ctxRader.fillText('danger!!', distanceObj.drawX + 30, distanceObj.drawY - 30 - 2);
+      }
+    }
+  }
 };
 
 
@@ -562,14 +683,14 @@ function calcOpacity(degreeDiff) {
 };
 
 
-//キーボードで入力されたキーに応じて、潜水艦を方向転換させる関数
+//キーボードで入力されたキーに応じて、潜水艦を方向転換、ミサイルを発射させる関数
 //jQueryの機能でキー入力があった場合に実行
 $(window).on("keydown", (event) => {
 
   //gameObj.myPlayerObj変数がない場合(用意できていない場合)や、ゲームオーバの場合は処理を抜ける
   if(!gameObj.myPlayerObj || gameObj.myPlayerObj.isAlive === false) return;
 
-  //入力があったキーによって処理を分岐
+  //入力があったキーによって処理を分岐（潜水艦の方向転換、ミサイルの発射）
   /* 
     キーボードで入力された方向キーと、潜水艦の向きが同じ場合は何もせず、
     そうでない場合は、潜水艦の向きをキーボードで入力された方向に設定＆潜水艦を再描画し、
@@ -600,6 +721,25 @@ $(window).on("keydown", (event) => {
       drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
       sendChangeDirection(socket, 'right');
       break;
+    case ' ':  //ミサイルの発射はスペースキー
+      if(gameObj.myPlayerObj.missilesMany <= 0) break;  //ミサイルのストックが0
+
+      gameObj.myPlayerObj.missilesMany -= 1;
+
+      //クライアントだけでもミサイルを描画＆移動できるように、擬似的なミサイルデータを作成して、gameObjに追加
+      const missileId = Math.floor(Math.random() * 100000) + ',' + gameObj.myPlayerObj.socketId + ',' + gameObj.myPlayerObj.x + ',' + gameObj.myPlayerObj.y;
+      const missileObj = {
+        emitPlayerId: gameObj.myPlayerObj.playerId,
+        x: gameObj.myPlayerObj.x,
+        y: gameObj.myPlayerObj.y,
+        direction: gameObj.myPlayerObj.direction,
+        id: missileId
+      };
+      gameObj.flyingMissilesMap.set(missileId, missileObj);
+
+      //サーバにミサイル発射を通知
+      sendMissileEmit(socket, gameObj.myPlayerObj.direction);
+      break;
   }
 });
 
@@ -607,4 +747,80 @@ $(window).on("keydown", (event) => {
 //サーバに潜水艦の方向転換を送信する関数
 function sendChangeDirection(socket, direction) {
   socket.emit('change direction', direction);
+};
+
+
+//サーバにミサイルを発射したことを送信
+function sendMissileEmit(socket, direction) {
+  socket.emit('missile emit', direction);
+};
+
+
+//クライアント側だけでも自機やミサイルを移動させる関数
+/* 
+  これを実装することにより、ユーザーに対して、通信状態が悪い場合でも快適に動作しているように見せることができる。
+  コード自体はサーバで座標を更新している実装と同じ。
+*/
+function moveInClient(myPlayerObj, flyingMissilesMap) {
+
+  //敵にやられてからの時間(爆発アニメーション用)
+  if (myPlayerObj.isAlive === false) {
+    if (myPlayerObj.deadCount < 60) {
+      myPlayerObj.deadCount += 1;
+    }
+    return;
+  }
+
+  //自機の移動
+  switch (myPlayerObj.direction) {
+    case 'left':
+      myPlayerObj.x -= 1;
+      break;
+    case 'up':
+      myPlayerObj.y -= 1;
+      break;
+    case 'down':
+      myPlayerObj.y += 1;
+      break;
+    case 'right':
+      myPlayerObj.x += 1;
+      break;
+  }
+
+  //画面端で反対側にループするよう、自機の座標を修正
+  if(myPlayerObj.x > gameObj.fieldWidth) myPlayerObj.x -= gameObj.fieldWidth;
+  if(myPlayerObj.x < 0) myPlayerObj.x += gameObj.fieldWidth;
+  if(myPlayerObj.y < 0) myPlayerObj.y += gameObj.fieldHeight;
+  if(myPlayerObj.y > gameObj.fieldHeight) myPlayerObj.y -= gameObj.fieldHeight;
+
+  //生存時間を計測
+  myPlayerObj.aliveTime.clock += 1;
+  if(myPlayerObj.aliveTime.clock === 30) {
+    myPlayerObj.aliveTime.clock = 0;
+    myPlayerObj.aliveTime.seconds += 1;
+  }
+
+  //発射されている全てのミサイルの移動(for文で回す)
+  for(let [missileId, flyingMissile] of flyingMissilesMap) {
+    switch(flyingMissile.direction) {
+      case 'left':
+        flyingMissile.x -= gameObj.missileSpeed;
+        break;
+      case 'up':
+        flyingMissile.y -= gameObj.missileSpeed;
+        break;
+      case 'down':
+        flyingMissile.y += gameObj.missileSpeed;
+        break;
+      case 'right':
+        flyingMissile.x += gameObj.missileSpeed;
+        break;
+    }
+
+    //画面端で反対側にループするよう、ミサイルの座標を修正
+    if(flyingMissile.x > gameObj.fieldWidth) flyingMissile.x -= gameObj.fieldWidth;
+    if(flyingMissile.x < 0) flyingMissile.x += gameObj.fieldWidth;
+    if(flyingMissile.y < 0) flyingMissile.y += gameObj.fieldHeight;
+    if(flyingMissile.y > gameObj.fieldHeight) flyingMissile.y -= gameObj.fieldHeight;
+  }
 };

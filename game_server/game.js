@@ -13,6 +13,11 @@ const gameObj = {
   playersMap: new Map(),  //ゲームに参加しているプレイヤー全員の情報を入れておく連想配列
   itemsMap: new Map(),  //ミサイル（魚雷）のアイテム情報を入れておく連想配列
   airMap: new Map(),  //酸素のアイテム情報を入れておく連想配列
+  flyingMissilesMap: new Map(),  //ゲーム内で発射されたミサイルの情報を格納するmap
+  missileAliveFlame: 180,  //ミサイルの生存時間
+  missileSpeed: 3,  //ミサイルの移動速度
+  missileWidth: 30,  //ミサイルの当たり判定(横幅)
+  missileHeight: 30,  //ミサイルの当たり判定(縦幅)
   fieldWidth: 1000,  //ゲームの横幅
   fieldHeight: 1000,  //ゲームの横幅
   itemTotal: 15,  //ゲームに出現するミサイルのアイテム数
@@ -39,12 +44,13 @@ function init() {
 init();  //ゲームの初期化（初期化はサーバ起動時に行う）
 
 
-//サーバーで潜水艦を移動させる処理を33ミリ秒ごとに呼び出す
+//サーバーで潜水艦を移動させる処理、とミサイルを移動させる処理、アイテム取得チェックする処理を33ミリ秒ごとに呼び出す
 const gameTicker = setInterval(() => {
-  movePlayers(gameObj.playersMap);
+  movePlayers(gameObj.playersMap);  //潜水艦の移動
+  moveMissile(gameObj.flyingMissilesMap);  //ミサイルの移動
 
-  //アイテムの取得チェック
-  checkGetItem(gameObj.playersMap, gameObj.itemsMap, gameObj.airMap);  
+  //潜水艦とアイテム、潜水艦とミサイルの当たり判定チェック(アイテムに当たった場合は取得、ミサイルの場合は撃沈扱い)
+  checkGetItem(gameObj.playersMap, gameObj.itemsMap, gameObj.airMap, gameObj.flyingMissilesMap);  
 }, 33);
 
 
@@ -82,15 +88,16 @@ function newConnection(socketId, displayName, thumbUrl) {
   const startObj = {
     playerObj: playerObj,
     fieldWidth: gameObj.fieldWidth,
-    fieldHeight: gameObj.fieldHeight
+    fieldHeight: gameObj.fieldHeight,
+    missileSpeed: gameObj.missileSpeed
   };
   return startObj;
 };
 
 
-//マップ情報を作成して返す関数
+//マップ情報を作成してクライアントへ送信する関数
 /* 
-  gameObj.playersMapとgameObj.itemsMap、gameObj.airMapを返すだけだが、
+  gameObj.playersMapとgameObj.itemsMap、gameObj.airMap、gameObj.flyingMissilesMapを返すだけだが、
   オブジェクトのままだと通信で送るにはデータとして大きすぎるので、
   値だけを配列に入れて返すようにする。
 */
@@ -98,7 +105,9 @@ function getMapData() {
   const playersArray = [];
   const itemsArray = [];
   const airArray = [];
+  const flyingMissilesArray = [];
 
+  //プレイヤーの現在の情報
   for(let [socketId, player] of gameObj.playersMap) {
     const playerDataForSend = [];
 
@@ -116,6 +125,7 @@ function getMapData() {
     playersArray.push(playerDataForSend);
   };
 
+  //ミサイルアイテムの位置情報
   for(let [id, item] of gameObj.itemsMap) {
     const itemDataForSend = [];
 
@@ -125,6 +135,7 @@ function getMapData() {
     itemsArray.push(itemDataForSend);
   };
 
+  //酸素アイテムの位置情報
   for(let [id, air] of gameObj.airMap) {
     const airDataForSend = [];
 
@@ -134,7 +145,19 @@ function getMapData() {
     airArray.push(airDataForSend);
   }
 
-  return [playersArray, itemsArray, airArray];  //2重配列を返す
+  //発射されたミサイルの情報(座標、進行方向、発射したプレイヤーのID)
+  for(let [id, flyingMissile] of gameObj.flyingMissilesMap) {
+    const flyingMissileDataForSend = [];
+
+    flyingMissileDataForSend.push(flyingMissile.x);
+    flyingMissileDataForSend.push(flyingMissile.y);
+    flyingMissileDataForSend.push(flyingMissile.direction);
+    flyingMissileDataForSend.push(flyingMissile.emitPlayerId);
+
+    flyingMissilesArray.push(flyingMissileDataForSend);
+  }
+
+  return [playersArray, itemsArray, airArray, flyingMissilesArray];  //2重配列を返す
 };
 
 
@@ -142,6 +165,35 @@ function getMapData() {
 function updatePlayerDirection(socketId, direction) {
   const playerObj = gameObj.playersMap.get(socketId);  //socketIdを元に、方向変換するユーザデータを取り出す
   playerObj.direction = direction;  //方向を変更
+};
+
+
+//ミサイルが発射されたことを、クライアントから通知を受けた時に実行する関数
+function missileEmit(socketId, direction) {
+
+  //プレイヤーがミサイルを打てる状況下どうかを判定、打てない状況ならreturnで処理終了
+  if(!gameObj.playersMap.has(socketId)) return;
+  let emitPlayerObj = gameObj.playersMap.get(socketId);
+  if(emitPlayerObj.missilesMany <= 0) return;  //発射ボタンを押したプレイヤーのミサイルのストックが0なので、処理せず終了
+  if(emitPlayerObj.isAlive === false) return;  //発射したプレイヤーがすでにやられていた場合は、処理せず終了
+
+  //ミサイルを発射したプレイヤーのミサイルのストック数を、一つ減らす
+  emitPlayerObj.missilesMany -= 1;
+
+  //ランダムで生成した数値、ミサイルを発射したプレイヤーのID、ミサイルを発射した時のプレイヤーの座標を、ミサイルIDとしてまとめる
+  const missileId = Math.floor(Math.random() * 100000) + ',' + socketId + ',' + emitPlayerObj.x + ',' + emitPlayerObj.y;
+
+  //ミサイルを発射したプレイヤーの情報、ミサイルを発射した時のプレイヤーの座標、ミサイルの生存時間、ミサイルの向き、ミサイルIDをオブジェクトとしてまとめ、ミサイル管理用の配列に追加
+  const missileObj = {
+    emitPlayerId: emitPlayerObj.playerId,
+    emitPlayerSocketId: socketId,
+    x: emitPlayerObj.x,
+    y: emitPlayerObj.y,
+    aliveFlame: gameObj.missileAliveFlame,
+    direction: direction,
+    id: missileId
+  };
+  gameObj.flyingMissilesMap.set(missileId, missileObj);
 };
 
 
@@ -253,6 +305,47 @@ function movePlayers(playersMap) {
 };
 
 
+//ミサイルを移動させる関数
+function moveMissile(flyingMissilesMap) {
+
+  //全ての発射されたミサイルについて扱うので、for文でループ
+  for (let [missileId, flyingMissile] of flyingMissilesMap) {
+    const missile = flyingMissile;
+
+    //ミサイルの生存時間を超えたミサイルは削除して、次のループへ
+    if(missile.aliveFlame === 0) {
+      flyingMissilesMap.delete(missileId);
+      continue;
+    }
+
+    //ループのたびに、ミサイルの生存時間を減らす
+    flyingMissile.aliveFlame -= 1;
+    
+    //ミサイルの向きに応じて、ミサイルを移動させる
+    switch (flyingMissile.direction) {
+      case 'left':
+        flyingMissile.x -= gameObj.missileSpeed;
+        break;
+      case 'up':
+        flyingMissile.y -= gameObj.missileSpeed;
+        break;
+      case 'down':
+        flyingMissile.y += gameObj.missileSpeed;
+        break;
+      case 'right':
+        flyingMissile.x += gameObj.missileSpeed;
+        break;
+    };
+
+    //画面端で反対側にループするよう、ミサイルの座標を修正
+    if(flyingMissile.x > gameObj.fieldWidth) flyingMissile.x -= gameObj.fieldWidth;
+    if(flyingMissile.x < 0) flyingMissile.x += gameObj.fieldWidth;
+    if(flyingMissile.y < 0) flyingMissile.y += gameObj.fieldHeight;
+    if(flyingMissile.y > gameObj.fieldHeight) flyingMissile.y -= gameObj.fieldHeight;
+  }
+};
+  
+
 //酸素の残り量(playerObj.airTime)を減らす
 //酸素の残り量が0になればゲームオーバー
 function decreaseAir(playerObj) {
@@ -263,8 +356,9 @@ function decreaseAir(playerObj) {
 };
 
 
-//アイテムの取得
-function checkGetItem(playersMap, itemsMap, airMap) {
+//潜水艦とアイテム、潜水艦とミサイルの当たり判定チェック
+//アイテムと当たった場合は取得、ミサイルの場合は撃沈
+function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
 
   //参加プレイヤー全員に行うので、for文でループ
   for (let [hashKey, playerObj] of playersMap) {
@@ -321,6 +415,23 @@ function checkGetItem(playersMap, itemsMap, airMap) {
         addAir();
       }
     }
+
+    //発射されたミサイルと、潜水艦の当たり判定の実装
+    for(let [missileId, flyingMissile] of flyingMissilesMap) {
+      const distanceObj = calculationBetweenTwoPoints(
+        playerObj.x, playerObj.y, flyingMissile.x, flyingMissile.y, gameObj.fieldWidth, gameObj.fieldHeight
+      );
+
+      //ミサイルが潜水艦に当たったかどうかの判定(当たったらGameOverにし、ミサイルを削除)
+      if(
+        distanceObj.distanceX <= (gameObj.submarineImageWidth / 2 + gameObj.missileWidth / 2) &&
+        distanceObj.distanceY <= (gameObj.submarineImageWidth / 2 + gameObj.missileHeight / 2) &&
+        playerObj.playerId !== flyingMissile.emitPlayerId
+      ) {
+        playerObj.isAlive = false;  //ミサイルと当たった潜水艦は撃沈
+        flyingMissilesMap.delete(missileId);  //潜水艦に当たったミサイルは削除
+      }
+    }
   }
 };
 
@@ -370,5 +481,6 @@ module.exports = {
   newConnection,
   getMapData,
   updatePlayerDirection,
+  missileEmit,
   disconnect
 };

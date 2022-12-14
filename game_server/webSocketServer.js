@@ -28,6 +28,12 @@ function createWebSocketServer(io, game) {
       game.updatePlayerDirection(socket.id, direction);
     });
 
+    //missile emitというメッセージを受け取った時の処理
+    //サーバ側でミサイル移動を処理する関数を呼び出す
+    socket.on('missile emit', (direction) => {
+      game.missileEmit(socket.id, direction);
+    });
+
     //ユーザが接続を切断をした時に実行
     socket.on('disconnect', () => {
       //game.disconnectは、プレイヤーが接続を切った時に実行する関数として、別で実装
