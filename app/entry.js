@@ -239,6 +239,12 @@ function drawMissiles(ctxScore, missilesMany) {
 };
 
 
+//img要素を保持するためのmapを用意
+//img要素を保持しておくことで、img要素の再作成によるチラつきを回避できる
+//gameObjにthumbsMapがあればそのまま使い、なければ新規にmapを作成
+gameObj.thumbsMap = gameObj.thumbsMap ?? new Map();
+
+
 //スコアエリアに表示する酸素量(残量は水色の数字で表示)
 function drawAirTimer(ctxScore, airTime) {
   ctxScore.fillStyle = "rgb(0, 220, 250)";
@@ -272,13 +278,45 @@ function drawRanking(ctxScore, playersMap) {
   ctxScore.font = '20px Arial';
 
   //ランキングを生成していく
+  //twitterログインを行った場合は、twitterアカウントの画像も表示する
   for(let i = 0; i < 10; i++) {
     if(!playersArray[i]) return;
+    
     const rank = i + 1;
-    ctxScore.fillText(
-      `${rank}th ${playersArray[i][1].displayName} ${playersArray[i][1].score}`,
-      10, 220 + (rank * 26)
-    );
+    const x = 10, y = 220 + (rank * 26);
+
+    //プレイヤーの情報から、ランキング生成に必要なものを取り出す
+    const {playerId, thumbUrl, displayName, score} = playersArray[i][1];
+
+    //プロフィール画像が存在する(twitterログイン済み)場合の処理
+    if(/twimg\.com/.test(thumbUrl)) {  //画像がTwitterのものかをURLをもとに判定
+
+      const thumbWidth = 20, thumbHeight = 20;
+      const rankWidth = ctxScore.measureText(`${rank}th`).width;
+
+      let thumb = null;
+
+      //gameObj.thumbsMapにimg要素がある場合は取得して描画、存在しないなら新たに作成＆追加して描画
+      if(gameObj.thumbsMap.has(playerId)) {
+        thumb = gameObj.thumbsMap.get(playerId);
+        draw();
+      } else {
+        thumb = new Image();
+        thumb.src = thumbUrl;
+        thumb.onload = draw;
+        gameObj.thumbsMap.set(playerId, thumb);
+      };
+
+      //画像付きのランキングを描画する処理を切り出しておく
+      function draw() {
+        ctxScore.fillText(`${rank}th`, x, y);
+        ctxScore.drawImage(thumb, x + rankWidth, y - thumbHeight, thumbWidth, thumbHeight);
+        ctxScore.fillText(`${displayName} ${score}`, x + rankWidth + thumbWidth, y);
+      };
+      continue;  //描画したら次のループへ
+    }
+    //プロフィール画像がない場合(ゲストユーザー、NPC)の処理
+    ctxScore.fillText(`${rank}th ${displayName} ${score}`, x, y);
   }
 };
 
@@ -335,6 +373,7 @@ socket.on('map data', (compressed) => {
     player.missilesMany = compressedPlayerData[7];
     player.airTime = compressedPlayerData[8];
     player.deadCount = compressedPlayerData[9];
+    player.thumbUrl = compressedPlayerData[10];
 
     //gameObjのplayersMapに、WebSocketサーバから受け取ったプレイヤーの各情報を追加()
     gameObj.playersMap.set(player.playerId, player);
@@ -351,6 +390,7 @@ socket.on('map data', (compressed) => {
       gameObj.myPlayerObj.missilesMany = compressedPlayerData[7];
       gameObj.myPlayerObj.airTime = compressedPlayerData[8];
       gameObj.myPlayerObj.deadCount = compressedPlayerData[9];
+      gameObj.myPlayerObj.thumbUrl = compressedPlayerData[10];
     }
   };
 

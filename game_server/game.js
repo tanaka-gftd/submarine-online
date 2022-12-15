@@ -134,7 +134,7 @@ function newConnection(socketId, displayName, thumbUrl) {
 };
 
 
-//マップ情報を作成してクライアントへ送信する関数
+//マップ情報を元に配列を作成してクライアントへ送信する関数
 /* 
   gameObj.playersMapとgameObj.itemsMap、gameObj.airMap、gameObj.flyingMissilesMapを返すだけだが、
   オブジェクトのままだと通信で送るにはデータとして大きすぎるので、
@@ -147,7 +147,7 @@ function getMapData() {
   const flyingMissilesArray = [];
   const playersAndNPCMap = new Map(Array.from(gameObj.playersMap).concat(Array.from(gameObj.NPCMap)));
 
-  //プレイヤーの現在の情報
+  //プレイヤーの現在の情報をまとめたmapを配列化
   for(let [socketId, player] of playersAndNPCMap) {
     const playerDataForSend = [];
 
@@ -161,11 +161,12 @@ function getMapData() {
     playerDataForSend.push(player.missilesMany);
     playerDataForSend.push(player.airTime);
     playerDataForSend.push(player.deadCount);
+    playerDataForSend.push(player.thumbUrl);
 
     playersArray.push(playerDataForSend);
   };
 
-  //ミサイルアイテムの位置情報
+  //ミサイルアイテムの位置情報を格納したmapを配列化
   for(let [id, item] of gameObj.itemsMap) {
     const itemDataForSend = [];
 
@@ -175,7 +176,7 @@ function getMapData() {
     itemsArray.push(itemDataForSend);
   };
 
-  //酸素アイテムの位置情報
+  //酸素アイテムの位置情報を格納したmapを配列化
   for(let [id, air] of gameObj.airMap) {
     const airDataForSend = [];
 
@@ -185,7 +186,7 @@ function getMapData() {
     airArray.push(airDataForSend);
   }
 
-  //発射されたミサイルの情報(座標、進行方向、発射したプレイヤーのID)
+  //発射されたミサイルの情報(座標、進行方向、発射したプレイヤーのID)を格納したmapを配列化
   for(let [id, flyingMissile] of gameObj.flyingMissilesMap) {
     const flyingMissileDataForSend = [];
 
@@ -197,7 +198,8 @@ function getMapData() {
     flyingMissilesArray.push(flyingMissileDataForSend);
   }
 
-  return [playersArray, itemsArray, airArray, flyingMissilesArray];  //2重配列を返す
+  //各配列をまとめて、2重配列としてクライアントへ返す
+  return [playersArray, itemsArray, airArray, flyingMissilesArray];
 };
 
 
