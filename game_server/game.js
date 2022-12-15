@@ -28,6 +28,8 @@ const gameObj = {
   itemRadius: 4,  //ミサイルアイテムの当たり判定用
   airRadius: 6,  //酸素アイテムの当たり判定用
   addAirTime: 30,  //酸素アイテムを取得した時の酸素増加量
+  itemPoint: 3,  //アイテム取得時の点数
+  killPoint: 500,  //他プレイヤー撃破時の点数
   submarineImageWidth: 42  //潜水艦の当たり判定用
 };
 
@@ -421,7 +423,8 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
         潜水艦とアイテムの距離が、「潜水艦の当たり判定 + ミサイルアイテムの当たり判定」以下なら、接触(アイテムGET)とする
         その上で、 
           ミサイルのアイテムをゲームから削除する
-          ミサイルの所持数を1つ増やすが、所持できる上限は6個である
+          プレイヤーのミサイルの所持数を1つ増やす(所持できる上限数は6個)
+          スコア加算
           ミサイルのアイテムをフィールドのどこかに追加する
         の3つの処理を行う
       */
@@ -429,16 +432,17 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
         distanceObj.distanceX <= (gameObj.submarineImageWidth / 2 + gameObj.itemRadius) &&
         distanceObj.distanceY <= (gameObj.submarineImageWidth / 2 + gameObj.itemRadius)
       ) {
-        gameObj.itemsMap.delete(itemKey);
+        gameObj.itemsMap.delete(itemKey);  //取得されたアイテムは削除
         playerObj.missilesMany = playerObj.missilesMany > 5 ? 6 : playerObj.missilesMany + 1;
-        addItem();
+        playerObj.score += gameObj.itemPoint;  //スコア加算
+        addItem();  //アイテムが一つ減ったので、アイテムを一つ追加
       }
-    }
+    };
 
     //酸素アイテム(青丸)
     /* 
       酸素アイテム取得も、ミサイルアイテムと同様に行う
-      ただし、酸素アイテムの所持できる上限は99個とする
+      ただし、酸素アイテム場合は所持できる上限を99個とする
     */
     for(let [airKey, airObj] of airMap) {
       const distanceObj = calculationBetweenTwoPoints(
@@ -455,6 +459,7 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
         } else {
           playerObj.airTime += gameObj.addAirTime;
         }
+        playerObj.score += gameObj.itemPoint;
         addAir();
       }
     }
@@ -472,6 +477,14 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
         playerObj.playerId !== flyingMissile.emitPlayerId
       ) {
         playerObj.isAlive = false;  //ミサイルと当たった潜水艦は撃沈
+
+        //撃破したプレイヤーにスコア加算
+        if(playersMap.has(flyingMissile.emitPlayerSocketId)) {
+          const emitPlayer = playersMap.get(flyingMissile.emitPlayerSocketId);
+          emitPlayer.score += gameObj.killPoint;
+          playersMap.set(flyingMissile.emitPlayerSocketId, emitPlayer);
+        };
+
         flyingMissilesMap.delete(missileId);  //潜水艦に当たったミサイルは削除
       }
     }

@@ -114,6 +114,8 @@ function ticker() {
   gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight);
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
   drawMissiles(gameObj.ctxScore, gameObj.myPlayerObj.missilesMany);
+  drawScore(gameObj.ctxScore, gameObj.myPlayerObj.score);
+  drawRanking(gameObj.ctxScore, gameObj.playersMap);
 
   //潜水艦とミサイルの動きはシンプルなので、フロントでも動かせるようにする
   moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap);
@@ -245,6 +247,42 @@ function drawAirTimer(ctxScore, airTime) {
 };
 
 
+//自分のスコアを表示
+function drawScore(ctxScore, score) {
+  ctxScore.fillStyle = "rgb(26, 26, 26)";
+  ctxScore.font = '28px Arial';
+  ctxScore.fillText(`score: ${score}`, 10, 180);
+};
+
+
+//スコアのランキング表示
+function drawRanking(ctxScore, playersMap) {
+
+  //playersMapを配列化し、空配列と結合することで、新規の配列を作成
+  //concatメソッド...2つ以上の配列を結合する。既存の配列を変更せずに新しい配列を返す
+  const playersArray = [].concat(Array.from(playersMap));
+
+  //scoreの値を元にソート
+  playersArray.sort((a, b) => b[1].score - a[1].score);
+
+  ctxScore.fillStyle = "rgb(0, 0, 0)";
+  ctxScore.fillRect(0, 220, gameObj.scoreCanvasWidth, 3);
+
+  ctxScore.fillStyle = "rgb(26, 26, 26)";
+  ctxScore.font = '20px Arial';
+
+  //ランキングを生成していく
+  for(let i = 0; i < 10; i++) {
+    if(!playersArray[i]) return;
+    const rank = i + 1;
+    ctxScore.fillText(
+      `${rank}th ${playersArray[i][1].displayName} ${playersArray[i][1].score}`,
+      10, 220 + (rank * 26)
+    );
+  }
+};
+
+
 /* 
   socket.on('イベント名', 関数) でWebSocketデータを受信した時の処理を実装。
 
@@ -338,12 +376,6 @@ socket.on('map data', (compressed) => {
       emitPlayerId: compressedFlyingMissileData[3]
     });
   });
-
-  //確認用
-  // console.log(gameObj.playersMap);  //プレイヤーID(key)と、そのプレイヤーの現在の状態(value)
-  // console.log(gameObj.itemsMap);  //ミサイルアイテムの出現番号(key)と、それに対応した出現座標(value)
-  // console.log(gameObj.airMap);  //酸素アイテムの出現番号(key)と、それに対応した出現座標(value)
-
 });
 
 
@@ -638,9 +670,6 @@ function calculationBetweenTwoPoints(pX, pY, oX, oY, gameWidth, gameHeight, rade
 
   //角度を求める
   const degree = calcTwoPointsDegree(drawX, drawY, raderCanvasWidth / 2, raderCanvasHeight / 2);
-
-  //確認用
-  //console.log(`distanceX: ${distanceX}, distanceY: ${distanceY}, drawX: ${drawX}, drawY: ${drawY}, degree: ${degree}`);
 
   return {
     distanceX,  //潜水艦と対象アイテムのX座標の差(絶対値)
