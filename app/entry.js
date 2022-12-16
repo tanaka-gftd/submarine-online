@@ -115,7 +115,7 @@ function ticker() {
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
   drawMissiles(gameObj.ctxScore, gameObj.myPlayerObj.missilesMany);
   drawScore(gameObj.ctxScore, gameObj.myPlayerObj.score);
-  drawRanking(gameObj.ctxScore, gameObj.playersMap);
+  drawRanking(gameObj.ctxScore, gameObj.playersMap, gameObj.myPlayerObj);
 
   //潜水艦とミサイルの動きはシンプルなので、フロントでも動かせるようにする
   moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap);
@@ -247,22 +247,22 @@ gameObj.thumbsMap = gameObj.thumbsMap ?? new Map();
 
 //スコアエリアに表示する酸素量(残量は水色の数字で表示)
 function drawAirTimer(ctxScore, airTime) {
-  ctxScore.fillStyle = "rgb(0, 220, 250)";
-  ctxScore.font = 'bold 40px Arial';
-  ctxScore.fillText(airTime, 110, 50);
+  ctxScore.fillStyle = "rgb(26, 26, 26)";
+  ctxScore.font = '24px Arial';
+  ctxScore.fillText(`残り酸素量: ${airTime}`, 10, 50);
 };
 
 
 //自分のスコアを表示
 function drawScore(ctxScore, score) {
   ctxScore.fillStyle = "rgb(26, 26, 26)";
-  ctxScore.font = '28px Arial';
+  ctxScore.font = 'bold 28px Arial';
   ctxScore.fillText(`score: ${score}`, 10, 180);
 };
 
 
 //スコアのランキング表示
-function drawRanking(ctxScore, playersMap) {
+function drawRanking(ctxScore, playersMap, myPlayerObj) {
 
   //playersMapを配列化し、空配列と結合することで、新規の配列を作成
   //concatメソッド...2つ以上の配列を結合する。既存の配列を変更せずに新しい配列を返す
@@ -271,22 +271,29 @@ function drawRanking(ctxScore, playersMap) {
   //scoreの値を元にソート
   playersArray.sort((a, b) => b[1].score - a[1].score);
 
-  ctxScore.fillStyle = "rgb(0, 0, 0)";
-  ctxScore.fillRect(0, 220, gameObj.scoreCanvasWidth, 3);
-
+  //ランキングエリアの横線
   ctxScore.fillStyle = "rgb(26, 26, 26)";
-  ctxScore.font = '20px Arial';
+  ctxScore.fillRect(0, 220, gameObj.scoreCanvasWidth, 3);
 
   //ランキングを生成していく
   //twitterログインを行った場合は、twitterアカウントの画像も表示する
   for(let i = 0; i < 10; i++) {
     if(!playersArray[i]) return;
-    
+
+    ctxScore.font = '20px Arial';
+
     const rank = i + 1;
     const x = 10, y = 220 + (rank * 26);
 
     //プレイヤーの情報から、ランキング生成に必要なものを取り出す
     const {playerId, thumbUrl, displayName, score} = playersArray[i][1];
+
+    //自分のスコアは青色、自分以外のスコアは黒色で表示
+    if(playerId === myPlayerObj.playerId){
+      ctxScore.fillStyle = "rgb(26, 26, 255)";
+    } else {
+      ctxScore.fillStyle = "rgb(26, 26, 26)";
+    };
 
     //プロフィール画像が存在する(twitterログイン済み)場合の処理
     if(/twimg\.com/.test(thumbUrl)) {  //画像がTwitterのものかをURLをもとに判定

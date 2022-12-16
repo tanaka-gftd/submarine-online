@@ -130,6 +130,9 @@ function newConnection(socketId, displayName, thumbUrl) {
     fieldHeight: gameObj.fieldHeight,
     missileSpeed: gameObj.missileSpeed
   };
+
+  console.log(`プレイヤーID ${startObj.playerObj.playerId} が参加しました`);    //ターミナルでの確認用
+
   return startObj;
 };
 
@@ -245,7 +248,10 @@ function missileEmit(socketId, direction) {
 
 //プレイヤーの接続が切れた時の処理
 function disconnect(socketId) {
+
   //接続が切れた場合はゲーム離脱と判断し、playersMapからプレイヤーデータを削除する
+  const quitPlayer = gameObj.playersMap.get(socketId);
+  console.log(`プレイヤーID ${quitPlayer.playerId} がプレイを止めました`);  //ターミナルでの確認用
   gameObj.playersMap.delete(socketId);
 };
 

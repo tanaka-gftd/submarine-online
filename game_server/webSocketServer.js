@@ -14,7 +14,7 @@ function createWebSocketServer(io, game) {
     const displayName = socket.handshake.query.displayName;
     const thumbUrl = socket.handshake.query.thumbUrl;
 
-    console.log('WebSocketのコネクションがありました。');  //ターミナルでの確認用
+    console.log('WebSocketの新たな接続がありました');  //ターミナルでの確認用
 
     //WebSocketの通信ID,表示名,サムネイル画像のURLの３つを引数とし、game.newConnectionを呼び、その結果に start data という名前をつけて送信
     //startObjの中身 {playerObj: playerObj, fieldWidth: gameObj.fieldWidth, fieldHeight: gameObj.fieldHeight};
@@ -36,6 +36,9 @@ function createWebSocketServer(io, game) {
 
     //ユーザが接続を切断をした時に実行
     socket.on('disconnect', () => {
+
+      console.log('WebSocketが切断されました');  //ターミナルでの確認用
+      
       //game.disconnectは、プレイヤーが接続を切った時に実行する関数として、別で実装
       game.disconnect(socket.id);
     });
