@@ -51,7 +51,7 @@ const gameObj = {
   fieldHeight: null,
   itemsMap: new Map(),
   airMap: new Map(),
-  flyingMissilesMap: new Map()  //ゲーム内で発射されたミサイルの情報を格納するmap(フロント用)
+  flyingMissilesMap: new Map(),  //ゲーム内で発射されたミサイルの情報を格納するmap(フロント用)
 };
 
 //websocketで通信するデータ(twitterのアカウント名とサムネイルURL)を設定
@@ -129,7 +129,7 @@ setInterval(ticker, 33);
 
 function drawGameOver(ctxRader) {
   ctxRader.font = 'bold 76px arial black';
-  ctxRader.fillStyle = "rgb(0, 220, 250)";
+  ctxRader.fillStyle = "rgb(255, 20, 20)";
   ctxRader.fillText('Game Over', 20, 270);
   ctxRader.strokeStyle = "rgb(0, 0, 0)";
   ctxRader.lineWidth = 3;
@@ -338,10 +338,19 @@ function drawRanking(ctxScore, playersMap, myPlayerObj) {
 socket.on('start data', (startObj) => {
 
   //引数で受け取ったオブジェクトから、各値を取り出す
-  /* 引数の中身 {playerObj: playerObj, fieldWidth: gameObj.fieldWidth, fieldHeight: gameObj.fieldHeight}; */
-  gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
+  /* 
+  引数で受け取ったオブジェクトの中身
+    {
+      fieldWidth: gameObj.fieldWidth,
+      fieldHeight: gameObj.fieldHeight,
+      submarineSpeed: gameObj.submarineSpeed,
+      missileSpeed: gameObj.missileSpeed
+    }
+  */ 
+ gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
   gameObj.fieldHeight = startObj.fieldHeight;  //ゲームの縦幅
   gameObj.myPlayerObj = startObj.playerObj;  //プレイヤーデータを持ったオブジェクト
+  gameObj.submarineSpeed = startObj.submarineSpeed;  //潜水艦の速度
   gameObj.missileSpeed = startObj.missileSpeed;  //ミサイルの速度
 });
 
@@ -837,7 +846,7 @@ function sendMissileEmit(socket, direction) {
   これを実装することにより、ユーザーに対して、通信状態が悪い場合でも快適に動作しているように見せることができる。
   コード自体はサーバで座標を更新している実装と同じ。
 */
-function moveInClient(myPlayerObj, flyingMissilesMap) {
+function moveInClient(myPlayerObj, flyingMissilesMap, gameObj) {
 
   //敵にやられてからの時間(爆発アニメーション用)
   if (myPlayerObj.isAlive === false) {
@@ -850,16 +859,16 @@ function moveInClient(myPlayerObj, flyingMissilesMap) {
   //自機の移動
   switch (myPlayerObj.direction) {
     case 'left':
-      myPlayerObj.x -= 1;
+      myPlayerObj.x -= gameObj.submarineSpeed;
       break;
     case 'up':
-      myPlayerObj.y -= 1;
+      myPlayerObj.y -= gameObj.submarineSpeed;
       break;
     case 'down':
-      myPlayerObj.y += 1;
+      myPlayerObj.y += gameObj.submarineSpeed;
       break;
     case 'right':
-      myPlayerObj.x += 1;
+      myPlayerObj.x += gameObj.submarineSpeed;
       break;
   }
 

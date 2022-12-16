@@ -17,7 +17,7 @@ const gameObj = {
   addingNPCPlayerNum: 9,  //参加人数がaddingNPCPlayerNum以下だと、NPCを追加するようにする
   flyingMissilesMap: new Map(),  //ゲーム内で発射されたミサイルの情報を格納するmap
   missileAliveFlame: 180,  //ミサイルの生存時間
-  missileSpeed: 3,  //ミサイルの移動速度
+  missileSpeed: 7,  //ミサイルの移動速度
   missileWidth: 30,  //ミサイルの当たり判定(横幅)
   missileHeight: 30,  //ミサイルの当たり判定(縦幅)
   directions: ['left', 'up', 'down', 'right'],  //方向の文字列
@@ -30,6 +30,7 @@ const gameObj = {
   addAirTime: 30,  //酸素アイテムを取得した時の酸素増加量
   itemPoint: 3,  //アイテム取得時の点数
   killPoint: 500,  //他プレイヤー撃破時の点数
+  submarineSpeed: 2,
   submarineImageWidth: 42  //潜水艦の当たり判定用
 };
 
@@ -128,6 +129,7 @@ function newConnection(socketId, displayName, thumbUrl) {
     playerObj: playerObj,
     fieldWidth: gameObj.fieldWidth,
     fieldHeight: gameObj.fieldHeight,
+    submarineSpeed: gameObj.submarineSpeed,
     missileSpeed: gameObj.missileSpeed
   };
 
@@ -251,7 +253,7 @@ function disconnect(socketId) {
 
   //接続が切れた場合はゲーム離脱と判断し、playersMapからプレイヤーデータを削除する
   const quitPlayer = gameObj.playersMap.get(socketId);
-  console.log(`プレイヤーID ${quitPlayer.playerId} がプレイを止めました`);  //ターミナルでの確認用
+  console.log(`プレイヤーID ${quitPlayer.playerId} がプレイを終了しました`);  //ターミナルでの確認用
   gameObj.playersMap.delete(socketId);
 };
 
@@ -323,16 +325,16 @@ function movePlayers(playersMap) {
     //潜水艦の向きに応じて、潜水艦の座標を変更する（これで"潜水艦の移動"が実現できる）
     switch (player.direction) {
       case 'left':
-        player.x -= 1;
+        player.x -= gameObj.submarineSpeed;
         break;
       case 'up':
-        player.y -= 1;
+        player.y -= gameObj.submarineSpeed;
         break;
       case 'down':
-        player.y += 1;
+        player.y += gameObj.submarineSpeed;
         break;
       case 'right':
-        player.x += 1;
+        player.x += gameObj.submarineSpeed;
         break;
     }
 

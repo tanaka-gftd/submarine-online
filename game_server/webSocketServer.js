@@ -17,9 +17,18 @@ function createWebSocketServer(io, game) {
     console.log('WebSocketの新たな接続がありました');  //ターミナルでの確認用
 
     //WebSocketの通信ID,表示名,サムネイル画像のURLの３つを引数とし、game.newConnectionを呼び、その結果に start data という名前をつけて送信
-    //startObjの中身 {playerObj: playerObj, fieldWidth: gameObj.fieldWidth, fieldHeight: gameObj.fieldHeight};
     //game.newConnectionは、プレイヤーが新たにゲームに参加した時に実行する関数として、別で実装しておく
     const startObj = game.newConnection(socket.id, displayName, thumbUrl);
+
+    /* 
+      startObjの中身
+        {
+          fieldWidth: gameObj.fieldWidth,
+          fieldHeight: gameObj.fieldHeight,
+          submarineSpeed: gameObj.submarineSpeed,
+          missileSpeed: gameObj.missileSpeed
+        }
+    */ 
     socket.emit('start data', startObj);
 
     //change directionというメッセージを受け取った時の処理
