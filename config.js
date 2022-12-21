@@ -4,6 +4,5 @@
 
 module.exports = {
   /* 開発用ページのURLもここに記載しておくと、修正しやすく便利 */
-  ipAddress: 'https://submarine-online-c2js.onrender.com:8000'
-  //ipAddress: 'http://localhost:8000'
+  ipAddress: 'http://localhost:8000'
 };
