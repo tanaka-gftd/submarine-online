@@ -110,6 +110,7 @@ function ticker() {
     drawGameOver(gameObj.ctxRader);
   };
 
+
   //スコアエリアに表示する、酸素残量とミサイルアイコン
   gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight);
   drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
@@ -118,7 +119,7 @@ function ticker() {
   drawRanking(gameObj.ctxScore, gameObj.playersMap, gameObj.myPlayerObj);
 
   //潜水艦とミサイルの動きはシンプルなので、フロントでも動かせるようにする
-  moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap);
+  moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap, gameObj.submarineSpeed, gameObj.missileSpeed);
 
   //tickerが実行されるたびに1つ増やし、10000を超えたら0にリセット、そしてまたticker実行ごとに1つずつ増やす
   gameObj.counter = (gameObj.counter + 1) % 10000;
@@ -347,7 +348,7 @@ socket.on('start data', (startObj) => {
       missileSpeed: gameObj.missileSpeed
     }
   */ 
- gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
+  gameObj.fieldWidth = startObj.fieldWidth;  //ゲームの横幅
   gameObj.fieldHeight = startObj.fieldHeight;  //ゲームの縦幅
   gameObj.myPlayerObj = startObj.playerObj;  //プレイヤーデータを持ったオブジェクト
   gameObj.submarineSpeed = startObj.submarineSpeed;  //潜水艦の速度
@@ -846,7 +847,7 @@ function sendMissileEmit(socket, direction) {
   これを実装することにより、ユーザーに対して、通信状態が悪い場合でも快適に動作しているように見せることができる。
   コード自体はサーバで座標を更新している実装と同じ。
 */
-function moveInClient(myPlayerObj, flyingMissilesMap, gameObj) {
+function moveInClient(myPlayerObj, flyingMissilesMap, submarineSpeed, missileSpeed) {
 
   //敵にやられてからの時間(爆発アニメーション用)
   if (myPlayerObj.isAlive === false) {
@@ -859,16 +860,16 @@ function moveInClient(myPlayerObj, flyingMissilesMap, gameObj) {
   //自機の移動
   switch (myPlayerObj.direction) {
     case 'left':
-      myPlayerObj.x -= gameObj.submarineSpeed;
+      myPlayerObj.x -= submarineSpeed;
       break;
     case 'up':
-      myPlayerObj.y -= gameObj.submarineSpeed;
+      myPlayerObj.y -= submarineSpeed;
       break;
     case 'down':
-      myPlayerObj.y += gameObj.submarineSpeed;
+      myPlayerObj.y += submarineSpeed;
       break;
     case 'right':
-      myPlayerObj.x += gameObj.submarineSpeed;
+      myPlayerObj.x += submarineSpeed;
       break;
   }
 
@@ -889,16 +890,16 @@ function moveInClient(myPlayerObj, flyingMissilesMap, gameObj) {
   for(let [missileId, flyingMissile] of flyingMissilesMap) {
     switch(flyingMissile.direction) {
       case 'left':
-        flyingMissile.x -= gameObj.missileSpeed;
+        flyingMissile.x -= missileSpeed;
         break;
       case 'up':
-        flyingMissile.y -= gameObj.missileSpeed;
+        flyingMissile.y -= missileSpeed;
         break;
       case 'down':
-        flyingMissile.y += gameObj.missileSpeed;
+        flyingMissile.y += missileSpeed;
         break;
       case 'right':
-        flyingMissile.x += gameObj.missileSpeed;
+        flyingMissile.x += missileSpeed;
         break;
     }
 

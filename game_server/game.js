@@ -30,7 +30,7 @@ const gameObj = {
   addAirTime: 30,  //酸素アイテムを取得した時の酸素増加量
   itemPoint: 3,  //アイテム取得時の点数
   killPoint: 500,  //他プレイヤー撃破時の点数
-  submarineSpeed: 2,
+  submarineSpeed: 2,  //潜水艦の速度
   submarineImageWidth: 42  //潜水艦の当たり判定用
 };
 
@@ -133,7 +133,7 @@ function newConnection(socketId, displayName, thumbUrl) {
     missileSpeed: gameObj.missileSpeed
   };
 
-  console.log(`プレイヤーID ${startObj.playerObj.playerId} が参加しました`);    //ターミナルでの確認用
+  console.log(`プレイヤーID ${playerObj.playerId} が参加しました`);    //ターミナルでの確認用
 
   return startObj;
 };
@@ -250,10 +250,6 @@ function missileEmit(socketId, direction) {
 
 //プレイヤーの接続が切れた時の処理
 function disconnect(socketId) {
-
-  //接続が切れた場合はゲーム離脱と判断し、playersMapからプレイヤーデータを削除する
-  const quitPlayer = gameObj.playersMap.get(socketId);
-  console.log(`プレイヤーID ${quitPlayer.playerId} がプレイを終了しました`);  //ターミナルでの確認用
   gameObj.playersMap.delete(socketId);
 };
 
