@@ -4,5 +4,6 @@
 
 module.exports = {
   /* 開発用ページのURLもここに記載しておくと、修正しやすく便利 */
-  ipAddress: 'http://localhost:8000'
+  //ipAddress: 'http://localhost:8000'
+  ipAddress: 'https://tanaka-submarine-online.onrender.com'
 };

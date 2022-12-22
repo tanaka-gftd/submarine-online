@@ -1,2 +1,2 @@
 yarn install --network-timeout 1000000
-node app.js
+PORT=8000 yarn start
