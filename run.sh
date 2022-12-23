@@ -1,2 +1,2 @@
 yarn install --network-timeout 1000000
-yarn start
+PORT=8000 yarn start
